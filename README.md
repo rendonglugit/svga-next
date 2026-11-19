@@ -14,7 +14,7 @@
 | `sample` | 两个 View 共享资源、切换请求、遮罩和音频示例 | `MainActivity` |
 | `benchmark-upstream` | 示例对照使用的官方源码快照，仅必要编译适配 | `SVGAParser → SVGADrawable` |
 
-设计说明见 [ARCHITECTURE](docs/ARCHITECTURE.md)，官方来源及改动见 [UPSTREAM](docs/UPSTREAM.md)，资源管理的设计取舍见 [DESIGN-REFERENCE](docs/DESIGN-REFERENCE.md)。
+设计说明见 [ARCHITECTURE](docs/ARCHITECTURE.md)，官方来源及改动见 [UPSTREAM](docs/UPSTREAM.md)，旧库迁移说明见 [MIGRATION](docs/MIGRATION.md)，资源管理的设计取舍见 [DESIGN-REFERENCE](docs/DESIGN-REFERENCE.md)。
 
 ## 首版能力
 
@@ -43,44 +43,194 @@
 
 首页“性能对比 · 官方 SVGAPlayer”可在同机、相同资源与尺寸下实测解析、重复加载、绘制和内存数据，支持导出原始 JSON。缓存负载与解析器负载分开统计，失败不会填入推测数值。方法、官方基线适配及复现方式见 [PERFORMANCE](docs/PERFORMANCE.md)。
 
-## 接入方式
+## 接入指南
 
-首版提供源码工程与本地 Maven 发布配置，不假设任何 Maven Central 或 GitHub 发布地址。
+首版提供源码工程与本地 Maven 发布配置，不假设任何外部 Maven Central 或私有仓库发布地址。
 
 ```sh
 ./gradlew :svga-core:publishToMavenLocal :svga-player:publishToMavenLocal :svga-runtime:publishToMavenLocal
 ```
 
-应用的仓库配置添加 `mavenLocal()` 后，可依赖：
+在宿主应用的根 `build.gradle.kts` 中添加 `mavenLocal()` 仓库后，根据项目阶段选择依赖：
 
 ```kotlin
+// 推荐：完整运行时（包含租约所有权管理、请求合并、字节 LRU 缓存与生命周期感知的 Managed View）
 implementation("dev.svganext:svga-runtime:0.1.0")
+
+// 可选：仅底层播放内核（适合旧项目做低成本渐进式替换，详见下方迁移指南）
+// implementation("dev.svganext:svga-player:0.1.0")
 ```
 
-建议通过 runtime 接入：
+---
+
+### 1. 全局初始化配置（推荐在 Application 中）
 
 ```kotlin
-val loader = SvgaLoader(context.applicationContext)
-val view = ManagedSvgaImageView(context)
-view.bind(
-    loader,
-    SvgaRequest(SvgaSource.Asset("heartbeat.svga"), width = 240, height = 240)
+class MainApplication : Application() {
+    companion object {
+        // 全局单例 Loader，确保内存缓存与请求合并跨页面、跨 View 生效
+        lateinit var svgaLoader: SvgaLoader
+            private set
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        // 1. 若动画包含音频，必须显式初始化音频池（否则播放无声）
+        SVGASoundManager.init()
+
+        // 2. 初始化全局加载器（默认 32MB 内存缓存预算）
+        val config = SvgaConfig(memoryCacheBytes = 64L * 1024 * 1024)
+        svgaLoader = SvgaLoader(this, config)
+
+        // 3. 调试日志开关（可选）
+        SVGALogger.setLogEnabled(BuildConfig.DEBUG)
+    }
+}
+```
+
+> [!IMPORTANT]
+> **关于 `SvgaLoader` 生命周期的重要原则**：  
+> `SvgaLoader` 内部持有 `ByteSizedCache` 内存缓存并注册了系统内存回调（`ComponentCallbacks2`）。**请务必作为应用级全局单例或大业务域单例使用**。切勿在每次播放动画或每个 View 销毁时频繁创建并调用 `loader.close()`，否则会导致跨 View 缓存命中率降为 0、并发请求合并完全失效。
+
+---
+
+### 2. 全新项目接入指南（最佳实践）
+
+#### XML 布局声明
+```xml
+<dev.svganext.runtime.ManagedSvgaImageView
+    android:id="@+id/svgaView"
+    android:layout_width="200dp"
+    android:layout_height="200dp"
+    app:autoPlay="true"
+    app:loopCount="0"
+    app:fillMode="Forward" />
+```
+
+> [!NOTE]
+> `ManagedSvgaImageView` 继承自 `SVGAImageView`，完整支持 `loopCount`、`autoPlay`、`fillMode`（Forward/Backward/Clear）、`antiAlias` 等播放控制属性。  
+> **注意**：为了确保所有在播实体都严格纳入租约所有权管理，`ManagedSvgaImageView` **故意禁用了 XML 的 `app:source` 自动解析**。资源来源必须通过 Kotlin/Java 代码中的 `bind` 注入。
+
+#### Kotlin 代码绑定与控制
+```kotlin
+// 1. 构造请求
+// 支持 SvgaSource.Asset("path.svga")、SvgaSource.File(file)、SvgaSource.Url("https://...")
+// width/height 同时为 0 表示原始解码尺寸；同时大于 0 时启用下采样解码以节省内存
+val request = SvgaRequest(
+    source = SvgaSource.Asset("heartbeat.svga"),
+    width = 200.dp,
+    height = 200.dp
 )
 
-// 页面或业务拥有 loader；销毁时先释放 View，再关闭 loader。
-view.clearRequest()
-loader.close()
+// 2. 配置监听回调（可选）
+svgaView.onLoaded = { req -> /* 解码成功并已绑定 */ }
+svgaView.onLoadError = { error -> /* 解码或网络失败 */ }
+svgaView.callback = object : SVGACallback {
+    override fun onFinished() { /* 仅在自然播放到最后一帧完成时触发 */ }
+    override fun onPause() {}
+    override fun onRepeat() {}
+    override fun onStep(frame: Int, percentage: Double) {}
+}
+
+// 3. 绑定并开始播放（autoPlay=true 时自动起播）
+svgaView.bind(MainApplication.svgaLoader, request)
 ```
 
-`SvgaSource.File(file)` 支持本地文件，`SvgaSource.Url("https://...")` 支持网络动画。使用网络来源时，应用应声明 `android.permission.INTERNET`。`width/height` 同时为 0 表示原始解码尺寸，同时大于 0 时启用官方采样逻辑。
+#### 动态内容替换（文本、头像、点击热区）
+```kotlin
+// 动态实体必须属于当前 View 独占，切勿跨 View 复用
+val dynamic = SVGADynamicEntity().apply {
+    setDynamicText("SVGA-Next", textPaint, "banner_text")
+    setDynamicImage(avatarBitmap, "avatar_key")
+}
 
-`ManagedSvgaImageView` 应通过 `bind` 指定来源；它不会自动解析继承的 XML `source` 属性，以免绕过资源所有权管理。其余播放属性可以照常设置。
+svgaView.bind(MainApplication.svgaLoader, request, dynamic)
+```
 
-如果不使用 View 而自行调用 `loader.load`，成功结果里的 `ResourceLease` 属于调用方。使用期间保持 lease 打开，结束时调用 `close()`；不要手动清除共享 `SVGAVideoEntity`。`cancel()` 取消尚未交付的结果，不会代替关闭已经交付的 lease。
+#### 页面销毁与列表复用
+```kotlin
+// 在 Activity/Fragment 销毁，或 RecyclerView ViewHolder 解绑复用时：
+svgaView.clearRequest()
 
-### URL 磁盘预取
+// 注意：此处切勿调用 MainApplication.svgaLoader.close()！
+```
 
-使用 `SVGAParser(context.applicationContext).prefetchToDisk(url) { result -> … }` 可在播放前预取。回调在主线程交付，返回值是取消函数。成功结果是缓存目录或原始文件，不是播放实体；不要修改该产物，也不要把它视为永久文件。正常 URL 播放会自动查找同一缓存，不需要手动传递文件。预取不初始化位图或音频。
+#### 高级：不使用 View，纯代码加载与租约持有
+```kotlin
+// 自行调用 loader.load 拿到的 ResourceLease 属于调用方
+val cancelHandle = MainApplication.svgaLoader.load(request) { result ->
+    result.fold(
+        onSuccess = { lease ->
+            try {
+                val entity = lease.value // 获取 SVGAVideoEntity
+                // 使用期间保持 lease 打开...
+            } finally {
+                // 使用完毕必须关闭 lease！严禁直接调用 entity.clear()！
+                lease.close()
+            }
+        },
+        onFailure = { error -> /* 处理错误 */ }
+    )
+}
+// 取消尚未交付的任务（已交付的 lease 仍需自行 close）
+cancelHandle.cancel()
+```
+
+#### URL 磁盘预取
+```kotlin
+// 在列表滚动或动画展示前预热磁盘（不初始化 Bitmap 与音频，主线程回调）
+val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
+    result.onSuccess { fileOrDir -> /* 磁盘预热就绪 */ }
+}
+```
+
+---
+
+### 3. 从官方 SVGAPlayer (`com.opensource.svgaplayer`) 迁移
+
+> [!WARNING]
+> **已接入过 svga-player 的项目可以“无感升级”吗？**  
+> **不可以！** 升级需要经过代码适配与行为排查。不能无感升级的核心原因包括：
+> 1. **包名与坐标变更**：包名从 `com.opensource.svgaplayer` 改为 `dev.svganext.player` 与 `dev.svganext.runtime`，必须修改 import 与 XML 标签。
+> 2. **资源所有权机制改变（严禁手动 `clear()`）**：旧版常在 `onDestroy` 调用 `videoEntity.clear()`；新版中 `SVGAVideoEntity` 生命周期受 `ResourceLease` 管理，**手动调用 `clear()` 会导致其他共享该资源的 View 发生 `recycled bitmap` 崩溃**！
+> 3. **XML `app:source` 失效**：`ManagedSvgaImageView` 禁用了该属性，必须改用代码 `bind()`。
+> 4. **`onFinished` 回调语义修正**：主动 `stopAnimation()` 或 Detach 不再触发自然完成通知。
+> 5. **磁盘缓存目录独立**：`${cacheDir}/svga-next/`，不复用旧版已下载文件。
+
+#### 迁移路线选择
+
+* **路线 A：渐进式内核替换（最低改动成本）**
+  * 依赖 `dev.svganext:svga-player:0.1.0`。
+  * 将代码中的 `com.opensource.svgaplayer` 全局批量替换为 `dev.svganext.player`。
+  * 保留原有的 `SVGAImageView` 与 `SVGAParser` 调用方式。
+  * **立竿见影的收益**：获得 `FloatArray(11)` 零对象分配绘制性能、细粒度分段文件锁消除主线程 I/O 卡死、原子缓存写入防损坏。
+  * **局限**：无法自动享受多 View 共享安全租约与请求并发合并。
+
+* **路线 B：全面升级 Runtime 架构（推荐，彻底根治内存泄漏）**
+  * 依赖 `dev.svganext:svga-runtime:0.1.0`。
+  * 将 XML 中的 `SVGAImageView` 替换为 `ManagedSvgaImageView`，**并删除 XML 中的 `app:source`**。
+  * 引入全局 `SvgaLoader` 单例，改用 `svgaView.bind(loader, request)`。
+  * **核心排查**：全面移除业务层原本调用的 `videoItem?.clear()`，所有权交给租约管理。
+
+完整迁移对比、Before & After 代码示例与详细避坑指南请查阅 [从官方 SVGAPlayer 迁移指南](docs/MIGRATION.md)。
+
+---
+
+### 4. 常用 API 与配置速查
+
+| 类名 / 模块 | 核心 API / 属性 | 用途与说明 |
+| :--- | :--- | :--- |
+| `SvgaLoader` | `load(request, callback)` | 提交动画加载请求，命中缓存或完成解码后主线程交付 `ResourceLease` |
+| `SvgaLoader` | `clearMemoryCache()` / `stats()` | 手动清空内存缓存；获取当前缓存条目数、已用字节与命中统计 |
+| `SvgaLoader` | `close()` | 销毁加载器，取消在途任务并注销系统内存监听（仅在模块彻底销毁时调用） |
+| `ManagedSvgaImageView` | `bind(loader, request, dynamic)` | 绑定加载器与请求，生命周期内自动安全持有与释放资源租约 |
+| `ManagedSvgaImageView` | `clearRequest()` | 解除当前绑定并排队释放资源，用于页面退出或列表项复用 |
+| `ManagedSvgaImageView` | `onLoaded` / `onLoadError` | 加载成功/失败的 Kotlin 函数式回调监听 |
+| `SVGADynamicEntity` | `setDynamicText` / `setDynamicImage` | 动态替换文本与图片，每个 View 须使用独占实例 |
+| `SVGASoundManager` | `init()` / `setVolume(volume)` | 初始化音频底层 SoundPool（有声动画必调）；设置全局音量 [0, 1] |
+| `SVGACache` | `clearCache()` | 异步清空磁盘缓存目录（默认位于 `${cacheDir}/svga-next/`） |
+| `SVGALogger` | `setLogEnabled(boolean)` | 控制底层日志输出开关 |
+| `SVGAParser` | `prefetchToDisk(url, callback)` | 纯磁盘预热，并发共享单次下载传输，返回取消函数 |
 
 ## 源码边界与验证
 
