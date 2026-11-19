@@ -1,6 +1,6 @@
-# Readable SVGA
+# SVGA-Next
 
-一个便于阅读、测试和维护的 Android SVGA 播放库。播放内核来自 Apache-2.0 的官方 SVGAPlayer；资源管理层独立实现共享引用、按字节计量的 LRU 缓存、重复请求合并及 View 生命周期管理。
+面向现代 Android 的下一代高性能、生命周期感知且无内存泄漏的 SVGA 播放与资源管理库。播放内核基于 Apache-2.0 官方 SVGAPlayer 深度重构；资源管理层独立实现共享引用租约（ResourceLease）、按字节计量的 LRU 缓存、并发请求合并（Request Coalescing）及 View 生命周期安全绑定。
 
 这是独立命名空间的首版工程（`0.1.0`），可与旧版 `com.opensource.svgaplayer` 并行接入。资源管理层不依赖其他应用的代码、资源或私有组件。
 

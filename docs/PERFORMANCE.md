@@ -1,16 +1,16 @@
 # 性能对比页面
 
-示例 App 首页的“性能对比 · 官方 SVGAPlayer”进入本页。对比对象为 Readable SVGA 0.1.0 和官方源码固定提交 `662d0dc11824e35a3f3fcd247f491efce2bf5ec5`。
+示例 App 首页的“性能对比 · 官方 SVGAPlayer”进入本页。对比对象为 SVGA-Next 0.1.0 和官方源码固定提交 `662d0dc11824e35a3f3fcd247f491efce2bf5ec5`。
 
 页面可以选择 heartbeat、matteRect、Castle，执行 3/5/10 轮采样，并导出包含每轮原始值、设备、资源 SHA-256、尺寸、测试顺序和构建状态的 JSON。结果仅在真实运行后显示；超时/失败侧显示缺失值和错误，不能被当作零耗时。
 
 ## 负载分开比较
 
-| 负载 | 相同条件 | Readable | 官方 |
+| 负载 | 相同条件 | SVGA-Next | 官方 |
 |---|---|---|---|
 | 播放内核解析 | 相同 asset、480×270 px、每项预热一次；从调用到主线程收到 prepared entity | 直接 SVGAParser，不经过实体缓存 | 直接官方 SVGAParser |
 | 重复加载 | 同一资源和尺寸，预热一次后重复调用 | SvgaLoader 的实体内存缓存 | 官方 Parser 重新解析，原源码没有实体内存缓存 |
-| 播放 | 每库单独播放，FIT_CENTER、相同视口，开始后等待 250 ms 再采样 3 秒 | 相同资源的 Readable View | 相同资源的官方 View |
+| 播放 | 每库单独播放，FIT_CENTER、相同视口，开始后等待 250 ms 再采样 3 秒 | 相同资源的 SVGA-Next View | 相同资源的官方 View |
 
 两个实现都通过其公开 API 初始化共享声音管理器，音量设为 0，仍计入音频准备工作。这个共同配置避免把声音管理使用方式的差异误认为图像解析性能差异。没有改变官方的音频加载/错误处理算法。
 
@@ -33,7 +33,7 @@ P95 使用 nearest-rank；5 次采样时 P95 就是本轮最大值。严谨性�
 
 `benchmark-upstream` 只供示例对比，不加入生产 `svga-runtime` 的依赖或 Maven 发布。保留官方 Apache-2.0 notices，命名空间改为 `dev.readablesvga.upstream`。
 
-必要适配为 SDK 35 非空 override 签名、Kotlin 2.1 捕获变量/nullable Canvas 类型，以及禁止同步 primitive 的编译限制（仍为同一个全局 unzip monitor）。没有移植 Readable 的缓存、线程数、音频状态或解析优化。逐文件适配见 [benchmark-upstream-compat.patch](benchmark-upstream-compat.patch)，原文件哈希见 [benchmark-upstream-snapshot.json](benchmark-upstream-snapshot.json)。观测桥只读取字节估算。
+必要适配为 SDK 35 非空 override 签名、Kotlin 2.1 捕获变量/nullable Canvas 类型，以及禁止同步 primitive 的编译限制（仍为同一个全局 unzip monitor）。没有移植 SVGA-Next 的缓存、线程数、音频状态或解析优化。逐文件适配见 [benchmark-upstream-compat.patch](benchmark-upstream-compat.patch)，原文件哈希见 [benchmark-upstream-snapshot.json](benchmark-upstream-snapshot.json)。观测桥只读取字节估算。
 
 ## 复现与结果
 

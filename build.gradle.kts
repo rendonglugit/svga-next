@@ -17,8 +17,8 @@ subprojects {
         extensions.configure<PublishingExtension> {
             publications.withType<MavenPublication>().configureEach {
                 pom {
-                    name.set("Readable SVGA - ${project.name}")
-                    description.set("Readable Android SVGA playback and independently implemented resource ownership")
+                    name.set("SVGA-Next - ${project.name}")
+                    description.set("Next-generation Android SVGA playback and independently implemented resource ownership")
                     licenses {
                         license {
                             name.set("Apache License, Version 2.0")

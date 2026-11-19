@@ -19,7 +19,7 @@ jobs:
         run: ./gradlew :svga-core:test :svga-player:testDebugUnitTest :svga-runtime:testDebugUnitTest :sample:testDebugUnitTest :sample:assembleDebug :svga-player:assembleRelease :svga-runtime:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: readable-svga-builds
+          name: svga-next-builds
           path: |
             **/build/outputs/aar/*.aar
             sample/build/outputs/apk/debug/*.apk
