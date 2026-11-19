@@ -31,7 +31,7 @@ P95 使用 nearest-rank；5 次采样时 P95 就是本轮最大值。严谨性�
 
 ## 官方对照的来源边界
 
-`benchmark-upstream` 只供示例对比，不加入生产 `svga-runtime` 的依赖或 Maven 发布。保留官方 Apache-2.0 notices，命名空间改为 `dev.readablesvga.upstream`。
+`benchmark-upstream` 只供示例对比，不加入生产 `svga-runtime` 的依赖或 Maven 发布。保留官方 Apache-2.0 notices，命名空间改为 `dev.svganext.upstream`。
 
 必要适配为 SDK 35 非空 override 签名、Kotlin 2.1 捕获变量/nullable Canvas 类型，以及禁止同步 primitive 的编译限制（仍为同一个全局 unzip monitor）。没有移植 SVGA-Next 的缓存、线程数、音频状态或解析优化。逐文件适配见 [benchmark-upstream-compat.patch](benchmark-upstream-compat.patch)，原文件哈希见 [benchmark-upstream-snapshot.json](benchmark-upstream-snapshot.json)。观测桥只读取字节估算。
 
@@ -40,7 +40,7 @@ P95 使用 nearest-rank；5 次采样时 P95 就是本轮最大值。严谨性�
 ```sh
 ./gradlew :sample:testDebugUnitTest :sample:assembleDebug :sample:lintDebug
 adb install -r sample/build/outputs/apk/debug/sample-debug.apk
-adb shell am start -S -W -n dev.readablesvga.sample/.PerformanceActivity \
+adb shell am start -S -W -n dev.svganext.sample/.PerformanceActivity \
   --ez benchmark_auto true --es benchmark_asset Castle.svga --ei benchmark_samples 5
 ```
 

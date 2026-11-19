@@ -54,7 +54,7 @@
 应用的仓库配置添加 `mavenLocal()` 后，可依赖：
 
 ```kotlin
-implementation("dev.readablesvga:svga-runtime:0.1.0")
+implementation("dev.svganext:svga-runtime:0.1.0")
 ```
 
 建议通过 runtime 接入：

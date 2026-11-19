@@ -2,7 +2,7 @@
 +++ benchmark-upstream/src/main/AndroidManifest.xml
 @@ -1,8 +1 @@
 -<manifest xmlns:android="http://schemas.android.com/apk/res/android"
--    package="dev.readablesvga.upstream">
+-    package="dev.svganext.upstream">
 -
 -    <application android:allowBackup="true" android:label="@string/app_name">
 -
@@ -11,7 +11,7 @@
 -</manifest>
 +<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
 --- official-relocated/java/com/opensource/svgaplayer/SVGADrawable.kt
-+++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/SVGADrawable.kt
++++ benchmark-upstream/src/main/java/dev/svganext/upstream/SVGADrawable.kt
 @@ -33,7 +33,7 @@
  
      private val drawer = SVGACanvasDrawer(videoItem, dynamicItem)
@@ -22,7 +22,7 @@
              return
          }
 --- official-relocated/java/com/opensource/svgaplayer/SVGAImageView.kt
-+++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/SVGAImageView.kt
++++ benchmark-upstream/src/main/java/dev/svganext/upstream/SVGAImageView.kt
 @@ -301,19 +301,19 @@
      private class AnimatorListener(view: SVGAImageView) : Animator.AnimatorListener {
          private val weakReference = WeakReference<SVGAImageView>(view)
@@ -57,7 +57,7 @@
          }
      } // end of AnimatorUpdateListener
 --- official-relocated/java/com/opensource/svgaplayer/SVGAParser.kt
-+++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/SVGAParser.kt
++++ benchmark-upstream/src/main/java/dev/svganext/upstream/SVGAParser.kt
 @@ -19,7 +19,7 @@
  /**
   * Created by PonyCui 16/6/18.
@@ -68,7 +68,7 @@
  
  class SVGAParser(context: Context?) {
 --- official-relocated/java/com/opensource/svgaplayer/drawer/SVGACanvasDrawer.kt
-+++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/drawer/SVGACanvasDrawer.kt
++++ benchmark-upstream/src/main/java/dev/svganext/upstream/drawer/SVGACanvasDrawer.kt
 @@ -256,7 +256,7 @@
                  } ?: kotlin.run {
                      textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)

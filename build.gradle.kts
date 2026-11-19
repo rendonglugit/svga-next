@@ -8,7 +8,7 @@ plugins {
     kotlin("jvm") version "2.1.0" apply false
 }
 allprojects {
-    group = "dev.readablesvga"
+    group = "dev.svganext"
     version = "0.1.0"
 }
 

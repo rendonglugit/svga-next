@@ -4,59 +4,59 @@
   "test_suites": [
     {
       "module": "svga-core",
-      "suite": "dev.readablesvga.core.ByteSizedCacheTest",
+      "suite": "dev.svganext.core.ByteSizedCacheTest",
       "tests": 15,
       "failures": 0,
       "errors": 0,
-      "report": "svga-core/build/test-results/test/TEST-dev.readablesvga.core.ByteSizedCacheTest.xml"
+      "report": "svga-core/build/test-results/test/TEST-dev.svganext.core.ByteSizedCacheTest.xml"
     },
     {
       "module": "svga-core",
-      "suite": "dev.readablesvga.core.GenerationGateTest",
+      "suite": "dev.svganext.core.GenerationGateTest",
       "tests": 3,
       "failures": 0,
       "errors": 0,
-      "report": "svga-core/build/test-results/test/TEST-dev.readablesvga.core.GenerationGateTest.xml"
+      "report": "svga-core/build/test-results/test/TEST-dev.svganext.core.GenerationGateTest.xml"
     },
     {
       "module": "svga-core",
-      "suite": "dev.readablesvga.core.ResourceLeaseTest",
+      "suite": "dev.svganext.core.ResourceLeaseTest",
       "tests": 5,
       "failures": 0,
       "errors": 0,
-      "report": "svga-core/build/test-results/test/TEST-dev.readablesvga.core.ResourceLeaseTest.xml"
+      "report": "svga-core/build/test-results/test/TEST-dev.svganext.core.ResourceLeaseTest.xml"
     },
     {
       "module": "svga-player",
-      "suite": "dev.readablesvga.player.PlayerResourceTest",
+      "suite": "dev.svganext.player.PlayerResourceTest",
       "tests": 16,
       "failures": 0,
       "errors": 0,
-      "report": "svga-player/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.player.PlayerResourceTest.xml"
+      "report": "svga-player/build/test-results/testDebugUnitTest/TEST-dev.svganext.player.PlayerResourceTest.xml"
     },
     {
       "module": "svga-runtime",
-      "suite": "dev.readablesvga.runtime.ManagedSvgaImageViewTest",
+      "suite": "dev.svganext.runtime.ManagedSvgaImageViewTest",
       "tests": 7,
       "failures": 0,
       "errors": 0,
-      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.runtime.ManagedSvgaImageViewTest.xml"
+      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.svganext.runtime.ManagedSvgaImageViewTest.xml"
     },
     {
       "module": "svga-runtime",
-      "suite": "dev.readablesvga.runtime.SvgaLoaderTest",
+      "suite": "dev.svganext.runtime.SvgaLoaderTest",
       "tests": 14,
       "failures": 0,
       "errors": 0,
-      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.runtime.SvgaLoaderTest.xml"
+      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.svganext.runtime.SvgaLoaderTest.xml"
     },
     {
       "module": "svga-runtime",
-      "suite": "dev.readablesvga.runtime.SvgaRequestTest",
+      "suite": "dev.svganext.runtime.SvgaRequestTest",
       "tests": 4,
       "failures": 0,
       "errors": 0,
-      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.runtime.SvgaRequestTest.xml"
+      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.svganext.runtime.SvgaRequestTest.xml"
     }
   ],
   "lint": [

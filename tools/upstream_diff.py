@@ -17,9 +17,9 @@ for upstream in sorted((args.upstream / "library/src/main").rglob("*")):
     if not upstream.is_file():
         continue
     relative = str(upstream.relative_to(args.upstream / "library/src/main"))
-    relocated = relative.replace("com/opensource/svgaplayer", "dev/readablesvga/player")
+    relocated = relative.replace("com/opensource/svgaplayer", "dev/svganext/player")
     current = root / "svga-player/src/main" / relocated
-    before = upstream.read_text().replace("com.opensource.svgaplayer", "dev.readablesvga.player")
+    before = upstream.read_text().replace("com.opensource.svgaplayer", "dev.svganext.player")
     after = current.read_text()
     if before != after:
         changed.append(relocated)

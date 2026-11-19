@@ -1,2 +1,2 @@
--keep class dev.readablesvga.upstream.proto.** { *; }
+-keep class dev.svganext.upstream.proto.** { *; }
 -keep class com.squareup.wire.** { *; }

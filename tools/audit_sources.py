@@ -17,10 +17,10 @@ for module in ("svga-core", "svga-player", "svga-runtime", "benchmark-upstream",
             text = path.read_text()
             assert "com.opensource.svgaplayer" not in text, path
             if path.suffix in {".kt", ".java"}:
-                assert "package dev.readablesvga." in text, path
+                assert "package dev.svganext." in text, path
         source_files.append({"path": str(path.relative_to(root)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
 for module in ("svga-core", "svga-player", "svga-runtime", "benchmark-upstream"):
-    legal = root / module / "src/main/resources/META-INF/readable-svga" / module
+    legal = root / module / "src/main/resources/META-INF/svga-next" / module
     assert (legal / "LICENSE").read_bytes() == (root / "LICENSE").read_bytes()
     assert (legal / "NOTICE").read_bytes() == (root / "NOTICE").read_bytes()
 baseline = json.loads((root / "docs/upstream-snapshot.json").read_text())
@@ -28,8 +28,8 @@ assert baseline["commit"] == "662d0dc11824e35a3f3fcd247f491efce2bf5ec5"
 for entry in baseline["files"]:
     if not entry["upstream_path"].endswith(".kt"):
         continue
-    path = root / "svga-player/src/main" / entry["upstream_path"].removeprefix("library/src/main/").replace("com/opensource/svgaplayer", "dev/readablesvga/player")
+    path = root / "svga-player/src/main" / entry["upstream_path"].removeprefix("library/src/main/").replace("com/opensource/svgaplayer", "dev/svganext/player")
     text = path.read_text()
     for comment in entry.get("attribution_comments", []):
-        assert comment.replace("com.opensource.svgaplayer", "dev.readablesvga.player") in text, path
+        assert comment.replace("com.opensource.svgaplayer", "dev.svganext.player") in text, path
 print(json.dumps({"status": "passed", "source_files_checked": len(source_files), "upstream_commit": baseline["commit"], "limits": "Text/path boundary check; not a legal opinion or proof of every code origin"}, indent=2))

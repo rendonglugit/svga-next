@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/svga/SVGAPlayer-Android",
   "commit": "662d0dc11824e35a3f3fcd247f491efce2bf5ec5",
-  "namespace_change": "com.opensource.svgaplayer -> dev.readablesvga.player",
+  "namespace_change": "com.opensource.svgaplayer -> dev.svganext.player",
   "files": [
     {
       "upstream_path": "library/src/main/AndroidManifest.xml",
