@@ -101,12 +101,27 @@ class ManagedSvgaImageViewTest {
         assertSame(current, (view.drawable as SVGADrawable).videoItem)
     }
 
+    @Test fun reattachBeforeMainQueueDrainsKeepsTheSameDrawable() {
+        view.bind(loader, request)
+        decoder.calls.single().succeed(emptyVideo(view.context))
+        shadowOf(Looper.getMainLooper()).idle()
+        val original = view.drawable as SVGADrawable
+        container.removeView(view)
+        assertSame(original, view.drawable)
+        container.addView(view)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertSame(original, view.drawable)
+        assertEquals(1, decoder.calls.size)
+        assertTrue(disposed.isEmpty())
+    }
+
     @Test fun invisibilityDropsTheViewLeaseButKeepsTheCacheReusable() {
         view.bind(loader, request)
         val video = emptyVideo(view.context)
         decoder.calls.single().succeed(video)
         shadowOf(Looper.getMainLooper()).idle()
         view.visibility = View.INVISIBLE
+        shadowOf(Looper.getMainLooper()).idle()
         assertNull(view.drawable)
         assertTrue(disposed.isEmpty())
         view.visibility = View.VISIBLE

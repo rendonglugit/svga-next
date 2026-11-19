@@ -47,6 +47,30 @@ class SvgaLoaderTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun scheduledIdleScanDisposesIdleButNotActiveVideo() {
+        val main = shadowOf(Looper.getMainLooper())
+        val other = request.copy(source = SvgaSource.Asset("other.svga"))
+        val idleVideo = emptyVideo(context)
+        val activeVideo = emptyVideo(context)
+        loader.load(request) { leases.add(it.getOrThrow()) }
+        decoder.calls[0].succeed(idleVideo)
+        main.idle()
+        leases.single().close()
+        loader.load(other) { leases.add(it.getOrThrow()) }
+        decoder.calls[1].succeed(activeVideo)
+        main.idle()
+        main.idleFor(59_999, TimeUnit.MILLISECONDS)
+        assertTrue(disposed.isEmpty())
+        main.idleFor(1, TimeUnit.MILLISECONDS)
+        assertEquals(listOf(idleVideo), disposed)
+        assertSame(activeVideo, leases.last().value)
+        loader.load(request) { leases.add(it.getOrThrow()) }
+        assertEquals(3, decoder.calls.size)
+        loader.close()
+        main.idleFor(120, TimeUnit.SECONDS)
+        assertEquals(listOf(idleVideo), disposed)
+    }
+
     @Test fun identicalRequestsShareDecodeButEachReceiveOwnership() {
         repeat(2) {
             loader.load(request) { result ->

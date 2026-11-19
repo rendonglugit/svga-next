@@ -29,3 +29,6 @@
 `svga-core` 和 `svga-runtime` 是本项目独立实现的新代码。这两个模块按本项目的资源所有权、缓存和请求契约编写。
 
 上游代码结构及 API 改动应通过本项目测试和真实动画验证，不能假设“沿用官方”就自动正确。直接使用 player 的实体与 Drawable API 时，调用方负责实体生命周期；推荐通过 runtime 的 lease 和 ManagedSvgaImageView 接入。
+
+- Managed runtime can opt out of the upstream View’s immediate detach stop to retain the same playback until its queued ownership cleanup runs. Direct player views retain their original behavior.
+- `SVGAVideoSpriteFrameEntity` flattens the frame matrix, alpha and layout bounds into an unboxed `float[11]` array (`[a, c, tx, b, d, ty, alpha, x, y, width, height]`), eliminating thousands of `Matrix` and `SVGARect` heap allocations per animation while keeping zero-allocation playback in `SVGACanvasDrawer`.

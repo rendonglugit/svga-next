@@ -304,8 +304,11 @@ open class SVGAImageView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
+    protected open fun handlesDetachPlayback(): Boolean = false
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        if (handlesDetachPlayback()) return
         stopAnimation(clearsAfterDetached)
         if (clearsAfterDetached) {
             clear()

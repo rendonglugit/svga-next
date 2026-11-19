@@ -2,6 +2,7 @@
 package dev.readablesvga.runtime
 
 import android.content.Context
+import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.util.Log
@@ -30,6 +31,15 @@ class ManagedSvgaImageView @JvmOverloads constructor(
     var autoPlay: Boolean = true
     var onLoaded: ((SvgaRequest) -> Unit)? = null
     var onLoadError: ((Throwable) -> Unit)? = null
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val deferredRelease = Runnable { if (!isEligible()) releaseDisplay() }
+
+    private fun scheduleRelease() {
+        mainHandler.removeCallbacks(deferredRelease)
+        if (displayed == null) releaseDisplay()
+        else if (!mainHandler.post(deferredRelease)) releaseDisplay()
+    }
 
     private val generations = GenerationGate()
     private var binding: Binding? = null
@@ -68,9 +78,10 @@ class ManagedSvgaImageView @JvmOverloads constructor(
     private fun updateVisibility() {
         if (binding == null) return
         if (!isEligible()) {
-            releaseDisplay()
+            scheduleRelease()
             return
         }
+        mainHandler.removeCallbacks(deferredRelease)
         if (pending != null || displayed != null) return
         val selected = binding ?: return
         val generation = generations.begin()
@@ -100,6 +111,7 @@ class ManagedSvgaImageView @JvmOverloads constructor(
     private fun isEligible(): Boolean = !temporarilyDetached && isAttachedToWindow && isShown && windowVisibility == View.VISIBLE
 
     private fun releaseDisplay() {
+        mainHandler.removeCallbacks(deferredRelease)
         generations.invalidate()
         pending?.cancel()
         pending = null
@@ -120,15 +132,17 @@ class ManagedSvgaImageView @JvmOverloads constructor(
         updateVisibility()
     }
 
+    override fun handlesDetachPlayback(): Boolean = true
+
     override fun onDetachedFromWindow() {
-        releaseDisplay()
+        scheduleRelease()
         clearsAfterDetached = false
         super.onDetachedFromWindow()
     }
 
     override fun onStartTemporaryDetach() {
         temporarilyDetached = true
-        releaseDisplay()
+        scheduleRelease()
         super.onStartTemporaryDetach()
     }
 

@@ -11,6 +11,99 @@ class ByteSizedCacheTest {
     private class Value(val bytes: Long) { val disposed = AtomicInteger() }
     private fun cache(maxBytes: Long) = ByteSizedCache<String, Value>(maxBytes, { it.bytes }) { it.disposed.incrementAndGet() }
 
+    @Test fun idleExpiryResetsOnReuseAndDoesNotExpireActiveClients() {
+        var now = 0L
+        val cache = ByteSizedCache<String, Value>(10, { it.bytes }, retainActive = true, clockMillis = { now }) {
+            it.disposed.incrementAndGet()
+        }
+        val value = Value(1)
+        cache.putAndAcquire("key", value).close()
+        now = 59_999
+        assertTrue(cache.expireIdle(60_000))
+        val active = cache.acquire("key")!!
+        now = 100_000
+        assertFalse(cache.expireIdle(60_000))
+        assertSame(value, active.value)
+        active.close()
+        now = 159_999
+        assertTrue(cache.expireIdle(60_000))
+        now = 160_000
+        assertFalse(cache.expireIdle(60_000))
+        assertNull(cache.acquire("key"))
+        assertEquals(1, value.disposed.get())
+        cache.close()
+    }
+
+    @Test fun idleBudgetEvictsOldestIdleEntryWithoutEvictingActiveEntry() {
+        val cache = ByteSizedCache<String, Value>(10, { it.bytes }, retainActive = true, maxIdleBytes = 4) { it.disposed.incrementAndGet() }
+        val active = cache.putAndAcquire("active", Value(4))
+        val older = Value(3)
+        val newer = Value(3)
+        cache.putAndAcquire("older", older).close()
+        cache.putAndAcquire("newer", newer).close()
+        assertNull(cache.acquire("older"))
+        assertEquals(1, older.disposed.get())
+        cache.acquire("active")!!.use { assertSame(active.value, it.value) }
+        cache.acquire("newer")!!.use { assertSame(newer, it.value) }
+        active.close()
+        cache.close()
+    }
+
+    @Test fun admissionRejectsWhenActiveBytesLeaveTooLittleRoomWithoutEvictingIdle() {
+        val cache = ByteSizedCache<String, Value>(10, { it.bytes }, retainActive = true) { it.disposed.incrementAndGet() }
+        val pinned = cache.putAndAcquire("pinned", Value(7))
+        val idle = Value(3)
+        cache.putAndAcquire("idle", idle).close()
+        val rejected = Value(4)
+        cache.putAndAcquire("rejected", rejected).use {
+            assertSame(rejected, it.value)
+            assertNull(cache.acquire("rejected"))
+            cache.acquire("idle")!!.use { hit -> assertSame(idle, hit.value) }
+        }
+        assertEquals(1, rejected.disposed.get())
+        pinned.close()
+        cache.close()
+    }
+
+    @Test fun rejectedReplacementDoesNotRestoreTheOldIndexOnClientClose() {
+        val cache = ByteSizedCache<String, Value>(4, { it.bytes }, retainActive = true) { it.disposed.incrementAndGet() }
+        val old = Value(4)
+        val oldClient = cache.putAndAcquire("key", old)
+        val rejected = Value(5)
+        cache.putAndAcquire("key", rejected).use {
+            assertSame(rejected, it.value)
+            assertNull(cache.acquire("key"))
+            assertSame(old, oldClient.value)
+        }
+        val current = Value(4)
+        cache.putAndAcquire("key", current).close()
+        oldClient.close()
+        cache.acquire("key")!!.use { assertSame(current, it.value) }
+        assertEquals(1, old.disposed.get())
+        assertEquals(1, rejected.disposed.get())
+        cache.close()
+    }
+
+    @Test fun activeEntriesRemainDiscoverableUntilLastClientCloses() {
+        val cache = ByteSizedCache<String, Value>(4, { it.bytes }, retainActive = true) { it.disposed.incrementAndGet() }
+        val first = Value(4)
+        val second = Value(4)
+        val a = cache.putAndAcquire("first", first)
+        val b = cache.acquire("first")!!
+        cache.putAndAcquire("second", second).close()
+        val c = cache.acquire("first")!!
+        assertSame(first, c.value)
+        assertEquals(1, second.disposed.get())
+        a.close()
+        b.close()
+        cache.trimToSize(0)
+        assertEquals(0, first.disposed.get())
+        c.close()
+        assertNull(cache.acquire("first"))
+        assertEquals(1, first.disposed.get())
+        cache.close()
+    }
+
     @Test fun evictionPreservesActiveClientOwnership() {
         val cache = cache(4)
         val first = Value(4)

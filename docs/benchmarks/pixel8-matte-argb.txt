@@ -1,0 +1,13 @@
+Total frames rendered: 169
+Janky frames: 3 (1.78%)
+Janky frames (legacy): 3 (1.78%)
+50th percentile: 10ms
+90th percentile: 13ms
+95th percentile: 14ms
+99th percentile: 23ms
+50th gpu percentile: 5ms
+90th gpu percentile: 6ms
+95th gpu percentile: 6ms
+99th gpu percentile: 7ms
+            Graphics:   113644                         113644
+           TOTAL PSS:   164412            TOTAL RSS:   314924       TOTAL SWAP PSS:       47

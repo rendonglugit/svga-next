@@ -11,36 +11,94 @@ import org.json.JSONObject
  */
 internal class SVGAVideoSpriteFrameEntity {
 
-    var alpha: Double
-    var layout = SVGARect(0.0, 0.0, 0.0, 0.0)
-    var transform = Matrix()
+    companion object {
+        const val INDEX_A = 0
+        const val INDEX_C = 1
+        const val INDEX_TX = 2
+        const val INDEX_B = 3
+        const val INDEX_D = 4
+        const val INDEX_TY = 5
+        const val INDEX_ALPHA = 6
+        const val INDEX_LAYOUT_X = 7
+        const val INDEX_LAYOUT_Y = 8
+        const val INDEX_LAYOUT_WIDTH = 9
+        const val INDEX_LAYOUT_HEIGHT = 10
+        const val FRAME_DATA_SIZE = 11
+    }
+
+    val frameData: FloatArray
     var maskPath: SVGAPathEntity? = null
-    var shapes: List<SVGAVideoShapeEntity> = listOf()
+    var shapes: List<SVGAVideoShapeEntity> = emptyList()
+
+    val alpha: Double
+        get() = frameData[INDEX_ALPHA].toDouble()
+
+    val layoutX: Float
+        get() = frameData[INDEX_LAYOUT_X]
+
+    val layoutY: Float
+        get() = frameData[INDEX_LAYOUT_Y]
+
+    val layoutWidth: Float
+        get() = frameData[INDEX_LAYOUT_WIDTH]
+
+    val layoutHeight: Float
+        get() = frameData[INDEX_LAYOUT_HEIGHT]
+
+    val layout: SVGARect
+        get() = SVGARect(
+            layoutX.toDouble(),
+            layoutY.toDouble(),
+            layoutWidth.toDouble(),
+            layoutHeight.toDouble()
+        )
+
+    val transform: Matrix
+        get() {
+            val matrix = Matrix()
+            matrix.setValues(
+                floatArrayOf(
+                    frameData[INDEX_A], frameData[INDEX_C], frameData[INDEX_TX],
+                    frameData[INDEX_B], frameData[INDEX_D], frameData[INDEX_TY],
+                    0f, 0f, 1f
+                )
+            )
+            return matrix
+        }
+
+    constructor(frameData: FloatArray) {
+        require(frameData.size == FRAME_DATA_SIZE) { "Frame data must have length $FRAME_DATA_SIZE" }
+        this.frameData = frameData
+    }
 
     constructor(obj: JSONObject) {
-        this.alpha = obj.optDouble("alpha", 0.0)
-        obj.optJSONObject("layout")?.let {
-            layout = SVGARect(it.optDouble("x", 0.0), it.optDouble("y", 0.0), it.optDouble("width", 0.0), it.optDouble("height", 0.0))
+        val data = FloatArray(FRAME_DATA_SIZE)
+        val transformObj = obj.optJSONObject("transform")
+        if (transformObj != null) {
+            data[INDEX_A] = transformObj.optDouble("a", 1.0).toFloat()
+            data[INDEX_C] = transformObj.optDouble("c", 0.0).toFloat()
+            data[INDEX_TX] = transformObj.optDouble("tx", 0.0).toFloat()
+            data[INDEX_B] = transformObj.optDouble("b", 0.0).toFloat()
+            data[INDEX_D] = transformObj.optDouble("d", 1.0).toFloat()
+            data[INDEX_TY] = transformObj.optDouble("ty", 0.0).toFloat()
+        } else {
+            data[INDEX_A] = 1.0f
+            data[INDEX_C] = 0.0f
+            data[INDEX_TX] = 0.0f
+            data[INDEX_B] = 0.0f
+            data[INDEX_D] = 1.0f
+            data[INDEX_TY] = 0.0f
         }
-        obj.optJSONObject("transform")?.let {
-            val arr = FloatArray(9)
-            val a = it.optDouble("a", 1.0)
-            val b = it.optDouble("b", 0.0)
-            val c = it.optDouble("c", 0.0)
-            val d = it.optDouble("d", 1.0)
-            val tx = it.optDouble("tx", 0.0)
-            val ty = it.optDouble("ty", 0.0)
-            arr[0] = a.toFloat()
-            arr[1] = c.toFloat()
-            arr[2] = tx.toFloat()
-            arr[3] = b.toFloat()
-            arr[4] = d.toFloat()
-            arr[5] = ty.toFloat()
-            arr[6] = 0.0.toFloat()
-            arr[7] = 0.0.toFloat()
-            arr[8] = 1.0.toFloat()
-            transform.setValues(arr)
+        data[INDEX_ALPHA] = obj.optDouble("alpha", 0.0).toFloat()
+        val layoutObj = obj.optJSONObject("layout")
+        if (layoutObj != null) {
+            data[INDEX_LAYOUT_X] = layoutObj.optDouble("x", 0.0).toFloat()
+            data[INDEX_LAYOUT_Y] = layoutObj.optDouble("y", 0.0).toFloat()
+            data[INDEX_LAYOUT_WIDTH] = layoutObj.optDouble("width", 0.0).toFloat()
+            data[INDEX_LAYOUT_HEIGHT] = layoutObj.optDouble("height", 0.0).toFloat()
         }
+        this.frameData = data
+
         obj.optString("clipPath")?.let { d ->
             if (d.isNotEmpty()) {
                 maskPath = SVGAPathEntity(d)
@@ -58,31 +116,33 @@ internal class SVGAVideoSpriteFrameEntity {
     }
 
     constructor(obj: FrameEntity) {
-        this.alpha = (obj.alpha ?: 0.0f).toDouble()
-        obj.layout?.let {
-            this.layout = SVGARect((it.x ?: 0.0f).toDouble(), (it.y
-                    ?: 0.0f).toDouble(), (it.width ?: 0.0f).toDouble(), (it.height
-                    ?: 0.0f).toDouble())
+        val data = FloatArray(FRAME_DATA_SIZE)
+        val transform = obj.transform
+        if (transform != null) {
+            data[INDEX_A] = transform.a ?: 1.0f
+            data[INDEX_C] = transform.c ?: 0.0f
+            data[INDEX_TX] = transform.tx ?: 0.0f
+            data[INDEX_B] = transform.b ?: 0.0f
+            data[INDEX_D] = transform.d ?: 1.0f
+            data[INDEX_TY] = transform.ty ?: 0.0f
+        } else {
+            data[INDEX_A] = 1.0f
+            data[INDEX_C] = 0.0f
+            data[INDEX_TX] = 0.0f
+            data[INDEX_B] = 0.0f
+            data[INDEX_D] = 1.0f
+            data[INDEX_TY] = 0.0f
         }
-        obj.transform?.let {
-            val arr = FloatArray(9)
-            val a = it.a ?: 1.0f
-            val b = it.b ?: 0.0f
-            val c = it.c ?: 0.0f
-            val d = it.d ?: 1.0f
-            val tx = it.tx ?: 0.0f
-            val ty = it.ty ?: 0.0f
-            arr[0] = a
-            arr[1] = c
-            arr[2] = tx
-            arr[3] = b
-            arr[4] = d
-            arr[5] = ty
-            arr[6] = 0.0f
-            arr[7] = 0.0f
-            arr[8] = 1.0f
-            transform.setValues(arr)
+        data[INDEX_ALPHA] = obj.alpha ?: 0.0f
+        val layout = obj.layout
+        if (layout != null) {
+            data[INDEX_LAYOUT_X] = layout.x ?: 0.0f
+            data[INDEX_LAYOUT_Y] = layout.y ?: 0.0f
+            data[INDEX_LAYOUT_WIDTH] = layout.width ?: 0.0f
+            data[INDEX_LAYOUT_HEIGHT] = layout.height ?: 0.0f
         }
+        this.frameData = data
+
         obj.clipPath?.takeIf { it.isNotEmpty() }?.let {
             maskPath = SVGAPathEntity(it)
         }

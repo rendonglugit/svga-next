@@ -1,0 +1,30 @@
+df0e1a5b83a93df95c24329ca17e96526736924c7744d2048d226a10d7c1ca15  /private/tmp/svga-matte-argb.apk
+eae42c8f5e797bcee3e1e6d0b1d63efb2f52b5b476fdd6e7121b2748357a9917  /private/tmp/svga-matte-alpha.apk
+FORMAT alpha
+Total frames rendered: 153
+Janky frames: 1 (0.65%)
+95th percentile: 10ms
+99th percentile: 11ms
+            Graphics:    87292                          87292
+           TOTAL PSS:   134536            TOTAL RSS:   285100       TOTAL SWAP PSS:       33
+FORMAT argb
+Total frames rendered: 148
+Janky frames: 0 (0.00%)
+95th percentile: 11ms
+99th percentile: 12ms
+            Graphics:    94732                          94732
+           TOTAL PSS:   145225            TOTAL RSS:   295772       TOTAL SWAP PSS:       47
+FORMAT argb
+Total frames rendered: 148
+Janky frames: 0 (0.00%)
+95th percentile: 12ms
+99th percentile: 13ms
+            Graphics:   100900                         100900
+           TOTAL PSS:   152563            TOTAL RSS:   302264       TOTAL SWAP PSS:       47
+FORMAT alpha
+Total frames rendered: 149
+Janky frames: 0 (0.00%)
+95th percentile: 10ms
+99th percentile: 12ms
+            Graphics:    83180                          83180
+           TOTAL PSS:   131895            TOTAL RSS:   281608       TOTAL SWAP PSS:       47

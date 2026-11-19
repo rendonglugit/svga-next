@@ -7,9 +7,13 @@ import android.animation.ValueAnimator
 import android.media.SoundPool
 import android.os.Looper
 import dev.readablesvga.player.entities.SVGAAudioEntity
+import dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity
 import dev.readablesvga.player.proto.AudioEntity
+import dev.readablesvga.player.proto.FrameEntity
+import dev.readablesvga.player.proto.Layout
 import dev.readablesvga.player.proto.MovieEntity
 import dev.readablesvga.player.proto.MovieParams
+import dev.readablesvga.player.proto.Transform
 import okio.ByteString
 import okio.ByteString.Companion.encodeUtf8
 import okio.ByteString.Companion.toByteString
@@ -460,6 +464,250 @@ class PlayerResourceTest {
         assertEquals(20_000, connection.connectTimeout)
     }
 
+    @Test fun prefetchPublishesBytesAndPlaybackReusesThemWithoutNetwork() = verifyPrefetch(false)
+
+    @Test fun prefetchedZipPlaysWithoutDownloadingAgain() = verifyPrefetch(true)
+
+    private fun verifyPrefetch(zip: Boolean) {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        val source = movie(emptyMap())
+        val bytes = if (zip) ByteArrayOutputStream().use { output ->
+            java.util.zip.ZipOutputStream(output).use { archive ->
+                archive.putNextEntry(java.util.zip.ZipEntry("movie.binary"))
+                archive.write(MovieEntity.ADAPTER.encode(source))
+                archive.closeEntry()
+            }
+            output.toByteArray()
+        } else compressed(source)
+        var downloads = 0
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                downloads++
+                ByteArrayInputStream(bytes).use(complete)
+                return {}
+            }
+        }
+        val files = mutableListOf<java.io.File>()
+        try {
+            repeat(2) {
+                parser.prefetchToDisk(url) { files.add(it.getOrThrow()) }
+                drain()
+            }
+            assertEquals(1, downloads)
+            assertEquals(2, files.size)
+            assertEquals(files[0], files[1])
+            assertArrayEquals(bytes, files[0].readBytes())
+            var video: SVGAVideoEntity? = null
+            parser.decodeFromURL(url, object : SVGAParser.ParseCompletion {
+                override fun onComplete(videoItem: SVGAVideoEntity) { video = videoItem }
+                override fun onError() { fail("Prefetched file did not play") }
+            })
+            repeat(2) { drain() }
+            assertNotNull(video)
+            assertEquals(1, downloads)
+            video?.clear()
+        } finally {
+            files.forEach { it.delete() }
+        }
+    }
+
+    @Test fun prefetchPrefersExtractedDirectoryOverRawFile() {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        val key = SVGACache.buildCacheKey(url)
+        val directory = SVGACache.buildCacheDir(key).apply { mkdirs() }
+        val raw = SVGACache.buildSvgaFile(key)
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit =
+                error("Disk prefetch unexpectedly started a download")
+        }
+        try {
+            raw.writeBytes(compressed(movie(emptyMap())))
+            directory.resolve("movie.binary").writeBytes(MovieEntity.ADAPTER.encode(movie(emptyMap())))
+            var artifact: java.io.File? = null
+            parser.prefetchToDisk(url) { artifact = it.getOrThrow() }
+            drain()
+            assertEquals(directory, artifact)
+        } finally {
+            directory.deleteRecursively()
+            raw.delete()
+        }
+    }
+
+    @Test fun urlEntryReturnsWhileSameKeyCacheWriterIsBlocked() {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        val writing = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val downloads = java.util.concurrent.atomic.AtomicInteger()
+        val caller = java.util.concurrent.Executors.newSingleThreadExecutor()
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                if (downloads.incrementAndGet() == 1) {
+                    complete(object : InputStream() {
+                        override fun read(): Int {
+                            writing.countDown()
+                            check(release.await(10, TimeUnit.SECONDS))
+                            return -1
+                        }
+                    })
+                }
+                return {}
+            }
+        }
+        val playback = SVGAParser(RuntimeEnvironment.getApplication()).apply { fileDownloader = parser.fileDownloader }
+        val cancel = parser.prefetchToDisk(url) { fail("Cancelled prefetch delivered a result") }
+        try {
+            assertTrue(writing.await(5, TimeUnit.SECONDS))
+            caller.submit { playback.decodeFromURL(url, null)?.invoke() }.get(5, TimeUnit.SECONDS)
+            assertEquals(1, downloads.get())
+        } finally {
+            cancel()
+            release.countDown()
+            caller.shutdownNow()
+        }
+        drain()
+        assertFalse(SVGACache.buildSvgaFile(SVGACache.buildCacheKey(url)).exists())
+    }
+
+    @Test fun cancelledInFlightPrefetchRejectsLateDownload() {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        var callbacks = 0
+        var cancellations = 0
+        lateinit var deliver: (InputStream) -> Unit
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                deliver = complete
+                return { cancellations++ }
+            }
+        }
+        val cancel = parser.prefetchToDisk(url) { callbacks++ }
+        drain()
+        cancel()
+        ByteArrayInputStream(compressed(movie(emptyMap()))).use(deliver)
+        drain()
+        assertEquals(1, cancellations)
+        assertEquals(0, callbacks)
+        assertFalse(SVGACache.buildSvgaFile(SVGACache.buildCacheKey(url)).exists())
+    }
+
+    @Test fun emptyPrefetchFailsWithoutPublishingCacheFile() {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                ByteArrayInputStream(byteArrayOf()).use(complete)
+                return {}
+            }
+        }
+        var error: Throwable? = null
+        parser.prefetchToDisk(url) { error = it.exceptionOrNull() }
+        drain()
+        assertTrue(error is IOException)
+        assertFalse(SVGACache.buildSvgaFile(SVGACache.buildCacheKey(url)).exists())
+    }
+
+    @Test fun cancelledQueuedPrefetchNeverStartsDownload() {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val blocker = CountDownLatch(1)
+        var downloads = 0
+        var callbacks = 0
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                downloads++
+                return {}
+            }
+        }
+        executor.execute { blocker.await(5, TimeUnit.SECONDS) }
+        try {
+            parser.prefetchToDisk(URL("https://example.invalid/${UUID.randomUUID()}.svga")) { callbacks++ }.invoke()
+        } finally {
+            blocker.countDown()
+        }
+        drain()
+        assertEquals(0, downloads)
+        assertEquals(0, callbacks)
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun sharedDownloadSurvivesOneCancellationAndDecodesEachSize() {
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        var starts = 0
+        var stops = 0
+        lateinit var deliver: (InputStream) -> Unit
+        val backend = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                starts++
+                deliver = complete
+                return { stops++ }
+            }
+        }
+        fun parser(width: Int) = SVGAParser(RuntimeEnvironment.getApplication()).apply {
+            fileDownloader = backend
+            setFrameSize(width, width / 2)
+        }
+        val videos = mutableListOf<SVGAVideoEntity>()
+        val callback = object : SVGAParser.ParseCompletion {
+            override fun onComplete(videoItem: SVGAVideoEntity) { videos.add(videoItem) }
+            override fun onError() { fail("Shared download failed") }
+        }
+        val cancelled = parser(16).decodeFromURL(url, object : SVGAParser.ParseCompletion {
+            override fun onComplete(videoItem: SVGAVideoEntity) { fail("Cancelled subscriber received a video") }
+            override fun onError() { fail("Cancelled subscriber received an error") }
+        })!!
+        parser(32).decodeFromURL(url, callback)
+        parser(64).decodeFromURL(url, callback)
+        try {
+            cancelled()
+            assertEquals(0, stops)
+            assertEquals(1, starts)
+            ByteArrayInputStream(compressed(movie(mapOf("image" to png(128, 64).toByteString())))).use(deliver)
+            drain()
+            assertEquals(listOf(32, 64), videos.map { it.imageMap.getValue("image").width })
+            assertNotSame(videos[0], videos[1])
+        } finally {
+            videos.forEach(SVGAVideoEntity::clear)
+        }
+    }
+
+    @Test fun lastSharedSubscriberCancelsTransportAndLateResultCannotCompleteReplacement() {
+        val parser = SVGAParser(RuntimeEnvironment.getApplication())
+        val url = URL("https://example.invalid/${UUID.randomUUID()}.svga")
+        val deliveries = mutableListOf<(InputStream) -> Unit>()
+        var stops = 0
+        var completions = 0
+        parser.fileDownloader = object : SVGAParser.FileDownloader() {
+            override fun resume(url: URL, complete: (InputStream) -> Unit, failure: (Exception) -> Unit): () -> Unit {
+                deliveries.add(complete)
+                return { stops++ }
+            }
+        }
+        val callback = object : SVGAParser.ParseCompletion {
+            override fun onComplete(videoItem: SVGAVideoEntity) { completions++; videoItem.clear() }
+            override fun onError() { fail("Unexpected parse failure") }
+        }
+        val first = parser.decodeFromURL(url, callback)!!
+        val second = parser.decodeFromURL(url, callback)!!
+        assertEquals(1, deliveries.size)
+        first()
+        assertEquals(0, stops)
+        second()
+        second()
+        assertEquals(1, stops)
+        parser.decodeFromURL(url, callback)
+        assertEquals(2, deliveries.size)
+        val bytes = compressed(movie(emptyMap()))
+        ByteArrayInputStream(bytes).use(deliveries[0])
+        drain()
+        assertEquals(0, completions)
+        ByteArrayInputStream(bytes).use(deliveries[1])
+        drain()
+        assertEquals(1, completions)
+    }
+
     private fun drain() {
         executor.submit {}.get(5, TimeUnit.SECONDS)
         shadowOf(Looper.getMainLooper()).idle()
@@ -479,6 +727,63 @@ class PlayerResourceTest {
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
         bitmap.recycle()
         output.toByteArray()
+    }
+
+    @Test
+    fun frameDataPacksTransformAndLayoutIntoFloat11() {
+        val protoTransform = Transform.Builder()
+            .a(1.5f).b(0.2f).c(0.3f).d(2.0f).tx(10f).ty(20f).build()
+        val protoLayout = Layout.Builder()
+            .x(5f).y(6f).width(100f).height(200f).build()
+        val protoFrame = FrameEntity.Builder()
+            .alpha(0.85f)
+            .transform(protoTransform)
+            .layout(protoLayout)
+            .build()
+
+        val frame = SVGAVideoSpriteFrameEntity(protoFrame)
+        assertEquals(SVGAVideoSpriteFrameEntity.FRAME_DATA_SIZE, frame.frameData.size)
+        assertEquals(1.5f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_A], 0.001f)
+        assertEquals(0.3f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_C], 0.001f)
+        assertEquals(10f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_TX], 0.001f)
+        assertEquals(0.2f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_B], 0.001f)
+        assertEquals(2.0f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_D], 0.001f)
+        assertEquals(20f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_TY], 0.001f)
+        assertEquals(0.85f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_ALPHA], 0.001f)
+        assertEquals(5f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_LAYOUT_X], 0.001f)
+        assertEquals(6f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_LAYOUT_Y], 0.001f)
+        assertEquals(100f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_LAYOUT_WIDTH], 0.001f)
+        assertEquals(200f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_LAYOUT_HEIGHT], 0.001f)
+
+        assertEquals(0.85, frame.alpha, 0.001)
+        assertEquals(100.0, frame.layout.width, 0.001)
+        assertEquals(200.0, frame.layout.height, 0.001)
+
+        val matrixValues = FloatArray(9)
+        frame.transform.getValues(matrixValues)
+        assertEquals(1.5f, matrixValues[0], 0.001f)
+        assertEquals(0.3f, matrixValues[1], 0.001f)
+        assertEquals(10f, matrixValues[2], 0.001f)
+        assertEquals(0.2f, matrixValues[3], 0.001f)
+        assertEquals(2.0f, matrixValues[4], 0.001f)
+        assertEquals(20f, matrixValues[5], 0.001f)
+    }
+
+    @Test
+    fun frameDataPacksJsonTransformAndLayoutIntoFloat11() {
+        val json = JSONObject()
+            .put("alpha", 0.5)
+            .put("transform", JSONObject().put("a", 2.0).put("b", 0.0).put("c", 0.0).put("d", 2.0).put("tx", 50.0).put("ty", 60.0))
+            .put("layout", JSONObject().put("x", 1.0).put("y", 2.0).put("width", 300.0).put("height", 400.0))
+
+        val frame = SVGAVideoSpriteFrameEntity(json)
+        assertEquals(SVGAVideoSpriteFrameEntity.FRAME_DATA_SIZE, frame.frameData.size)
+        assertEquals(2.0f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_A], 0.001f)
+        assertEquals(50.0f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_TX], 0.001f)
+        assertEquals(60.0f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_TY], 0.001f)
+        assertEquals(0.5f, frame.frameData[SVGAVideoSpriteFrameEntity.INDEX_ALPHA], 0.001f)
+        assertEquals(300.0f, frame.layoutWidth, 0.001f)
+        assertEquals(400.0f, frame.layoutHeight, 0.001f)
     }
 
     private fun compressed(movie: MovieEntity): ByteArray = ByteArrayOutputStream().use { output ->

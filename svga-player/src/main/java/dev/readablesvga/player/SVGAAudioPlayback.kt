@@ -1,5 +1,6 @@
 package dev.readablesvga.player
 
+import android.util.Log
 import dev.readablesvga.player.entities.SVGAAudioEntity
 
 /** Per-drawable stream ownership. The cached entity owns only reusable sound samples. */
@@ -15,6 +16,17 @@ internal class SVGAAudioPlayback(
         fun setVolume(streamId: Int, volume: Float)
     }
 
+    private fun trace(action: String, streamId: Int) {
+        if (Log.isLoggable("SvgaStreamTrace", Log.DEBUG)) {
+            Log.d("SvgaStreamTrace", "owner=${System.identityHashCode(this)} $action stream=$streamId")
+        }
+    }
+
+    private fun stopStream(streamId: Int) {
+        player.stop(streamId)
+        trace("stop", streamId)
+    }
+
     private val streams = mutableMapOf<SVGAAudioEntity, Int>()
     private var lastFrame = -1
     private var paused = false
@@ -26,13 +38,16 @@ internal class SVGAAudioPlayback(
         lastFrame = frameIndex
         videoItem.audioList.forEach { audio ->
             if (audio.startFrame == frameIndex && audio.endFrame > frameIndex) {
-                streams.remove(audio)?.let(player::stop)
+                streams.remove(audio)?.let(::stopStream)
                 audio.soundID?.let { sampleId ->
                     val streamId = player.play(sampleId)
-                    if (streamId > 0) streams[audio] = streamId
+                    if (streamId > 0) {
+                        streams[audio] = streamId
+                        trace("play", streamId)
+                    }
                 }
             }
-            if (audio.endFrame <= frameIndex) streams.remove(audio)?.let(player::stop)
+            if (audio.endFrame <= frameIndex) streams.remove(audio)?.let(::stopStream)
         }
         if (videoItem.usesSharedSoundPool && streams.isNotEmpty()) {
             SVGASoundManager.registerPlayback(this)
@@ -55,7 +70,7 @@ internal class SVGAAudioPlayback(
 
     @Synchronized
     fun stop() {
-        streams.values.forEach(player::stop)
+        streams.values.forEach(::stopStream)
         streams.clear()
         lastFrame = -1
         paused = false

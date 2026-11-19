@@ -34,14 +34,18 @@ class ResourceLease<V : Any> private constructor(private val resource: SharedRes
         if (release) resource.release()
     }
 
+    internal fun isSoleOwner() = resource.isSoleOwner()
+
     companion object {
         /** Takes exclusive ownership of a newly created, otherwise unowned resource. */
         fun <V : Any> own(value: V, dispose: (V) -> Unit): ResourceLease<V> =
             ResourceLease(SharedResource(value, dispose))
+        internal fun <V : Any> observed(value: V, dispose: (V) -> Unit, onIdle: () -> Unit): ResourceLease<V> =
+            ResourceLease(SharedResource(value, dispose, onIdle))
     }
 }
 
-private class SharedResource<V : Any>(value: V, private val dispose: (V) -> Unit) {
+private class SharedResource<V : Any>(value: V, private val dispose: (V) -> Unit, private val onIdle: (() -> Unit)? = null) {
     private val lock = Any()
     private var value: V? = value
     private var references = 1
@@ -55,13 +59,18 @@ private class SharedResource<V : Any>(value: V, private val dispose: (V) -> Unit
         references++
     }
 
+    fun isSoleOwner() = synchronized(lock) { references == 1 }
+
     fun release() {
+        var becameIdle = false
         val retired = synchronized(lock) {
             check(references > 0) { "Resource reference count is invalid" }
             references--
+            becameIdle = references == 1
             if (references == 0) value.also { value = null } else null
         }
         // User cleanup runs without either the lease or reference-count lock.
         retired?.let(dispose)
+        if (becameIdle) onIdle?.invoke()
     }
 }

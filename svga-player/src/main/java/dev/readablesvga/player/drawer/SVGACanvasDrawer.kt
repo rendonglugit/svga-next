@@ -79,16 +79,16 @@ internal class SVGACanvasDrawer(
 
             /// Is matte end
             if (isMatteEnd(index, sprites)) {
-                matteSprites.get(svgaDrawerSprite.matteKey)?.let {
-                    drawSprite(it, this.sharedValues.shareMatteCanvas(canvas.width, canvas.height), frameIndex)
-                    canvas.drawBitmap(this.sharedValues.sharedMatteBitmap(), 0f, 0f, this.sharedValues.shareMattePaint())
-                    if (saveID != -1) {
+                if (saveID != -1) {
+                    try {
+                        matteSprites[svgaDrawerSprite.matteKey]?.let { mask ->
+                            drawSprite(mask, sharedValues.shareMatteCanvas(canvas.width, canvas.height), frameIndex)
+                            canvas.drawBitmap(sharedValues.sharedMatteBitmap(), 0f, 0f, sharedValues.shareMattePaint())
+                        }
+                    } finally {
                         canvas.restoreToCount(saveID)
-                    } else {
-                        canvas.restore()
+                        saveID = -1
                     }
-                    // Continue
-                    return@forEachIndexed
                 }
             }
         }
@@ -168,6 +168,15 @@ internal class SVGACanvasDrawer(
         return matrix
     }
 
+    private fun shareFrameMatrix(frameData: FloatArray): Matrix {
+        val transform = this.sharedValues.populateFrameTransform(frameData)
+        val matrix = this.sharedValues.sharedMatrix()
+        matrix.postScale(scaleInfo.scaleFx, scaleInfo.scaleFy)
+        matrix.postTranslate(scaleInfo.tranFx, scaleInfo.tranFy)
+        matrix.preConcat(transform)
+        return matrix
+    }
+
     private fun drawSprite(sprite: SVGADrawerSprite, canvas: Canvas, frameIndex: Int) {
         drawImage(sprite, canvas)
         drawShape(sprite, canvas)
@@ -183,11 +192,13 @@ internal class SVGACanvasDrawer(
         val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(0, imageKey.length - 6) else imageKey
         val drawingBitmap = (dynamicItem.dynamicImage[bitmapKey] ?: videoItem.imageMap[bitmapKey])
                 ?: return
-        val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
+        val frameMatrix = shareFrameMatrix(sprite.frameEntity.frameData)
         val paint = this.sharedValues.sharedPaint()
         paint.isAntiAlias = antiAlias
         paint.isFilterBitmap = antiAlias
         paint.alpha = (sprite.frameEntity.alpha * 255).toInt()
+        val layoutW = sprite.frameEntity.layoutWidth
+        val layoutH = sprite.frameEntity.layoutHeight
         if (sprite.frameEntity.maskPath != null) {
             val maskPath = sprite.frameEntity.maskPath ?: return
             canvas.save()
@@ -195,13 +206,13 @@ internal class SVGACanvasDrawer(
             maskPath.buildPath(path)
             path.transform(frameMatrix)
             canvas.clipPath(path)
-            frameMatrix.preScale((sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(), (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat())
+            frameMatrix.preScale(layoutW / drawingBitmap.width, layoutH / drawingBitmap.height)
             if (!drawingBitmap.isRecycled) {
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
             }
             canvas.restore()
         } else {
-            frameMatrix.preScale((sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(), (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat())
+            frameMatrix.preScale(layoutW / drawingBitmap.width, layoutH / drawingBitmap.height)
             if (!drawingBitmap.isRecycled) {
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
             }
@@ -314,7 +325,7 @@ internal class SVGACanvasDrawer(
     }
 
     private fun drawShape(sprite: SVGADrawerSprite, canvas: Canvas) {
-        val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
+        val frameMatrix = shareFrameMatrix(sprite.frameEntity.frameData)
         sprite.frameEntity.shapes.forEach { shape ->
             shape.buildPath()
             shape.shapePath?.let {
@@ -438,17 +449,17 @@ internal class SVGACanvasDrawer(
     private fun drawDynamic(sprite: SVGADrawerSprite, canvas: Canvas, frameIndex: Int) {
         val imageKey = sprite.imageKey ?: return
         dynamicItem.dynamicDrawer[imageKey]?.let {
-            val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
+            val frameMatrix = shareFrameMatrix(sprite.frameEntity.frameData)
             canvas.save()
             canvas.concat(frameMatrix)
             it.invoke(canvas, frameIndex)
             canvas.restore()
         }
         dynamicItem.dynamicDrawerSized[imageKey]?.let {
-            val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
+            val frameMatrix = shareFrameMatrix(sprite.frameEntity.frameData)
             canvas.save()
             canvas.concat(frameMatrix)
-            it.invoke(canvas, frameIndex, sprite.frameEntity.layout.width.toInt(), sprite.frameEntity.layout.height.toInt())
+            it.invoke(canvas, frameIndex, sprite.frameEntity.layoutWidth.toInt(), sprite.frameEntity.layoutHeight.toInt())
             canvas.restore()
         }
     }
@@ -460,6 +471,12 @@ internal class SVGACanvasDrawer(
         private val sharedPath2 = Path()
         private val sharedMatrix = Matrix()
         private val sharedMatrix2 = Matrix()
+        private val sharedFrameTransform = Matrix()
+        private val sharedMatrixValues = FloatArray(9).apply {
+            this[6] = 0f
+            this[7] = 0f
+            this[8] = 1f
+        }
 
         private val shareMattePaint = Paint()
         private var shareMatteCanvas: Canvas? = null
@@ -490,6 +507,17 @@ internal class SVGACanvasDrawer(
             return sharedMatrix2
         }
 
+        fun populateFrameTransform(frameData: FloatArray): Matrix {
+            sharedMatrixValues[0] = frameData[dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity.INDEX_A]
+            sharedMatrixValues[1] = frameData[dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity.INDEX_C]
+            sharedMatrixValues[2] = frameData[dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity.INDEX_TX]
+            sharedMatrixValues[3] = frameData[dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity.INDEX_B]
+            sharedMatrixValues[4] = frameData[dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity.INDEX_D]
+            sharedMatrixValues[5] = frameData[dev.readablesvga.player.entities.SVGAVideoSpriteFrameEntity.INDEX_TY]
+            sharedFrameTransform.setValues(sharedMatrixValues)
+            return sharedFrameTransform
+        }
+
         fun shareMattePaint(): Paint {
             shareMattePaint.setXfermode(PorterDuffXfermode(PorterDuff.Mode.DST_IN))
             return shareMattePaint
@@ -500,14 +528,15 @@ internal class SVGACanvasDrawer(
         }
 
         fun shareMatteCanvas(width: Int, height: Int): Canvas {
-            if (shareMatteCanvas == null) {
-                sharedMatteBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
-//                shareMatteCanvas = Canvas(sharedMatteBitmap)
+            val current = sharedMatteBitmap
+            if (current == null || current.width != width || current.height != height) {
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                sharedMatteBitmap = bitmap
+                shareMatteCanvas = Canvas(bitmap)
             }
-//            val matteCanvas = shareMatteCanvas as Canvas
-//            matteCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-//            return matteCanvas
-            return Canvas(requireNotNull(sharedMatteBitmap))
+            return requireNotNull(shareMatteCanvas).also {
+                it.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            }
         }
     }
 

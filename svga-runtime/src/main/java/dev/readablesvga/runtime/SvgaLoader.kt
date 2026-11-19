@@ -4,6 +4,7 @@ package dev.readablesvga.runtime
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
+import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -34,11 +35,29 @@ class SvgaLoader internal constructor(
     private var closed = false
     private val flights = HashMap<String, Flight>()
     private val pending = HashSet<Waiter>()
+    private var scanScheduled = false
+    private val idleScan = Runnable { scanIdle() }
     private val cache = ByteSizedCache<String, SVGAVideoEntity>(
         config.memoryCacheBytes,
         { it.estimatedMemoryBytes.coerceAtLeast(1L) },
-        ::releaseVideo,
+        retainActive = true,
+        maxIdleBytes = config.memoryCacheBytes - config.memoryCacheBytes / 2,
+        clockMillis = SystemClock::elapsedRealtime,
+        onIdle = ::scheduleIdleScan,
+        dispose = ::releaseVideo,
     )
+
+    private fun scheduleIdleScan() = synchronized(lock) {
+        if (!closed && !scanScheduled) scanScheduled = handler.postDelayed(idleScan, 60_000L)
+    }
+
+    private fun scanIdle() {
+        synchronized(lock) {
+            scanScheduled = false
+            if (closed) return
+        }
+        if (cache.expireIdle(60_000L)) scheduleIdleScan()
+    }
 
     init {
         application.registerComponentCallbacks(this)
@@ -186,6 +205,7 @@ class SvgaLoader internal constructor(
             closed = true
             requests = pending.toList()
         }
+        handler.removeCallbacks(idleScan)
         requests.forEach { it.cancel() }
         application.unregisterComponentCallbacks(this)
         cache.close()
