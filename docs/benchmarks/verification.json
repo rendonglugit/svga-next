@@ -1,0 +1,47 @@
+{
+  "test_count": 6,
+  "test_failures": 0,
+  "test_errors": 0,
+  "sample_lint_errors": 0,
+  "sample_lint_warnings": 13,
+  "apk_sha256": "456e1480f7833a348444ebbcdfb7b7f6af6c1f96b863446af8ef4901b5f51000",
+  "device": {
+    "model": "Pixel 8",
+    "sdk": 37,
+    "codename": "REL"
+  },
+  "official_commit": "662d0dc11824e35a3f3fcd247f491efce2bf5ec5",
+  "scenarios": [
+    "Castle.svga",
+    "heartbeat.svga"
+  ],
+  "scope": "Sample comparison only; production APIs unchanged",
+  "limits": [
+    "debug APK",
+    "single device",
+    "five load trials; three-second playback window",
+    "process snapshots not retained allocations"
+  ],
+  "records": [
+    {
+      "file": "2026-11-19-pixel8-castle.json",
+      "asset": "Castle.svga",
+      "captured_at_utc": "2026-11-19T06:40:35.225Z",
+      "engine_order": [
+        "readable",
+        "official"
+      ]
+    },
+    {
+      "file": "2026-11-19-pixel8-heartbeat.json",
+      "asset": "heartbeat.svga",
+      "captured_at_utc": "2026-11-19T06:47:57.482Z",
+      "engine_order": [
+        "readable",
+        "official"
+      ]
+    }
+  ],
+  "screenshot_review": "Result table and controls visually checked",
+  "layout_instrumentation": "CLI instrumentation installation unavailable; screenshot inspection used"
+}

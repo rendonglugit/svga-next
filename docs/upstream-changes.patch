@@ -1,0 +1,1727 @@
+--- upstream-relocated/AndroidManifest.xml
++++ svga-player/src/main/AndroidManifest.xml
+@@ -1,8 +1 @@
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-    package="dev.readablesvga.player">
+-
+-    <application android:allowBackup="true" android:label="@string/app_name">
+-
+-    </application>
+-
+-</manifest>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+--- upstream-relocated/java/dev/readablesvga/player/SVGACache.kt
++++ svga-player/src/main/java/dev/readablesvga/player/SVGACache.kt
+@@ -36,7 +36,7 @@
+     fun onCreate(context: Context?, type: Type) {
+         if (isInitialized()) return
+         context ?: return
+-        cacheDir = "${context.cacheDir.absolutePath}/svga/"
++        cacheDir = "${context.cacheDir.absolutePath}/readable-svga/"
+         File(cacheDir).takeIf { !it.exists() }?.mkdirs()
+         this.type = type
+     }
+@@ -116,4 +116,4 @@
+         return File("$cacheDir$audio.mp3")
+     }
+ 
+-}+}
+--- upstream-relocated/java/dev/readablesvga/player/SVGADrawable.kt
++++ svga-player/src/main/java/dev/readablesvga/player/SVGADrawable.kt
+@@ -7,7 +7,17 @@
+ import android.widget.ImageView
+ import dev.readablesvga.player.drawer.SVGACanvasDrawer
+ 
+-class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity): Drawable() {
++class SVGADrawable private constructor(
++    val videoItem: SVGAVideoEntity,
++    val dynamicItem: SVGADynamicEntity,
++    internal val audioPlayback: SVGAAudioPlayback
++): Drawable() {
++
++    constructor(videoItem: SVGAVideoEntity, dynamicItem: SVGADynamicEntity) :
++            this(videoItem, dynamicItem, SVGAAudioPlayback(videoItem))
++
++    internal constructor(videoItem: SVGAVideoEntity, audioPlayback: SVGAAudioPlayback) :
++            this(videoItem, SVGADynamicEntity(), audioPlayback)
+ 
+     constructor(videoItem: SVGAVideoEntity): this(videoItem, SVGADynamicEntity())
+ 
+@@ -31,15 +41,21 @@
+ 
+     var scaleType: ImageView.ScaleType = ImageView.ScaleType.MATRIX
+ 
+-    private val drawer = SVGACanvasDrawer(videoItem, dynamicItem)
++    private val drawer = SVGACanvasDrawer(videoItem, dynamicItem, audioPlayback)
+ 
+-    override fun draw(canvas: Canvas?) {
++    /** Rendering preference belongs to this drawable, rather than to a cached shared entity. */
++    var antiAlias: Boolean
++        get() = drawer.antiAlias
++        set(value) {
++            drawer.antiAlias = value
++            invalidateSelf()
++        }
++
++    override fun draw(canvas: Canvas) {
+         if (cleared) {
+             return
+         }
+-        canvas?.let {
+-            drawer.drawFrame(it,currentFrame, scaleType)
+-        }
++        drawer.drawFrame(canvas, currentFrame, scaleType)
+     }
+ 
+     override fun setAlpha(alpha: Int) {
+@@ -55,52 +71,20 @@
+     }
+ 
+     fun resume() {
+-        videoItem.audioList.forEach { audio ->
+-            audio.playID?.let {
+-                if (SVGASoundManager.isInit()){
+-                    SVGASoundManager.resume(it)
+-                }else{
+-                    videoItem.soundPool?.resume(it)
+-                }
+-            }
+-        }
++        audioPlayback.resume()
+     }
+ 
+     fun pause() {
+-        videoItem.audioList.forEach { audio ->
+-            audio.playID?.let {
+-                if (SVGASoundManager.isInit()){
+-                    SVGASoundManager.pause(it)
+-                }else{
+-                    videoItem.soundPool?.pause(it)
+-                }
+-            }
+-        }
++        audioPlayback.pause()
+     }
+ 
+     fun stop() {
+-        videoItem.audioList.forEach { audio ->
+-            audio.playID?.let {
+-                if (SVGASoundManager.isInit()){
+-                    SVGASoundManager.stop(it)
+-                }else{
+-                    videoItem.soundPool?.stop(it)
+-                }
+-            }
+-        }
++        audioPlayback.stop()
+     }
+ 
++    /** Clears this playback only. Its owner releases the entity after the final lease closes. */
+     fun clear() {
+-        videoItem.audioList.forEach { audio ->
+-            audio.playID?.let {
+-                if (SVGASoundManager.isInit()){
+-                    SVGASoundManager.stop(it)
+-                }else{
+-                    videoItem.soundPool?.stop(it)
+-                }
+-            }
+-            audio.playID = null
+-        }
+-        videoItem.clear()
++        stop()
++        cleared = true
+     }
+-}+}
+--- upstream-relocated/java/dev/readablesvga/player/SVGAImageView.kt
++++ svga-player/src/main/java/dev/readablesvga/player/SVGAImageView.kt
+@@ -5,6 +5,7 @@
+ import android.annotation.SuppressLint
+ import android.content.Context
+ import android.os.Build
++import android.provider.Settings
+ import android.util.AttributeSet
+ import android.view.MotionEvent
+ import android.view.View
+@@ -83,11 +84,16 @@
+                 }
+             }
+         }
+-        typedArray.getString(R.styleable.SVGAImageView_source)?.let {
+-            parserSource(it)
++        if (shouldLoadSourceFromAttributes()) {
++            typedArray.getString(R.styleable.SVGAImageView_source)?.let {
++                parserSource(it)
++            }
+         }
+         typedArray.recycle()
+     }
++
++    /** Managed views can route all source loading through their resource owner. */
++    protected open fun shouldLoadSourceFromAttributes(): Boolean = true
+ 
+     private fun parserSource(source: String) {
+         val refImgView = WeakReference<SVGAImageView>(this)
+@@ -111,7 +117,6 @@
+ 
+     private fun startAnimation(videoItem: SVGAVideoEntity) {
+         this@SVGAImageView.post {
+-            videoItem.antiAlias = mAntiAlias
+             setVideoItem(videoItem)
+             getSVGADrawable()?.scaleType = scaleType
+             if (mAutoPlay) {
+@@ -130,24 +135,35 @@
+     }
+ 
+     private fun play(range: SVGARange?, reverse: Boolean) {
+-        LogUtils.info(TAG, "================ start animation ================")
+         val drawable = getSVGADrawable() ?: return
++        val videoItem = drawable.videoItem
++        if (videoItem.FPS <= 0 || videoItem.frames <= 0 || (range != null && range.length <= 0)) {
++            LogUtils.error(TAG, "Cannot animate an empty frame range or invalid fps")
++            return
++        }
++        mStartFrame = (range?.location ?: 0).coerceIn(0, videoItem.frames - 1)
++        val requestedLength = range?.length?.toLong() ?: videoItem.frames.toLong()
++        mEndFrame = minOf(videoItem.frames - 1L, mStartFrame.toLong() + requestedLength - 1).toInt()
+         setupDrawable()
+-        mStartFrame = Math.max(0, range?.location ?: 0)
+-        val videoItem = drawable.videoItem
+-        mEndFrame = Math.min(videoItem.frames - 1, ((range?.location ?: 0) + (range?.length ?: Int.MAX_VALUE) - 1))
++        val scale = generateScale()
++        if (scale == 0.0) {
++            // Honor disabled system animations without changing the host's global setting.
++            // Show the terminal frame and deliver completion once; no animator or audio loop runs.
++            drawable.currentFrame = if (reverse) mStartFrame else mEndFrame
++            val callback = callback
++            callback?.onStep(drawable.currentFrame, (drawable.currentFrame + 1.0) / videoItem.frames)
++            callback?.onFinished()
++            return
++        }
++        val frameCount = mEndFrame.toLong() - mStartFrame + 1
+         val animator = ValueAnimator.ofInt(mStartFrame, mEndFrame)
+         animator.interpolator = LinearInterpolator()
+-        animator.duration = ((mEndFrame - mStartFrame + 1) * (1000 / videoItem.FPS) / generateScale()).toLong()
++        animator.duration = (1000.0 * frameCount / videoItem.FPS / scale).toLong().coerceAtLeast(1)
+         animator.repeatCount = if (loops <= 0) 99999 else loops - 1
+         animator.addUpdateListener(mAnimatorUpdateListener)
+         animator.addListener(mAnimatorListener)
+-        if (reverse) {
+-            animator.reverse()
+-        } else {
+-            animator.start()
+-        }
+         mAnimator = animator
++        if (reverse) animator.reverse() else animator.start()
+     }
+ 
+     private fun setupDrawable() {
+@@ -160,26 +176,18 @@
+         return drawable as? SVGADrawable
+     }
+ 
+-    @Suppress("UNNECESSARY_SAFE_CALL")
+     private fun generateScale(): Double {
+-        var scale = 1.0
+-        try {
+-            val animatorClass = Class.forName("android.animation.ValueAnimator") ?: return scale
+-            val getMethod = animatorClass.getDeclaredMethod("getDurationScale") ?: return scale
+-            scale = (getMethod.invoke(animatorClass) as Float).toDouble()
+-            if (scale == 0.0) {
+-                val setMethod = animatorClass.getDeclaredMethod("setDurationScale",Float::class.java) ?: return scale
+-                setMethod.isAccessible = true
+-                setMethod.invoke(animatorClass,1.0f)
+-                scale = 1.0
+-                LogUtils.info(TAG,
+-                        "The animation duration scale has been reset to" +
+-                                " 1.0x, because you closed it on developer options.")
+-            }
+-        } catch (ignore: Exception) {
+-            ignore.printStackTrace()
+-        }
+-        return scale
++        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
++            ValueAnimator.getDurationScale().toDouble()
++        } else {
++            try {
++                (ValueAnimator::class.java.getDeclaredMethod("getDurationScale").invoke(null) as Float).toDouble()
++            } catch (e: ReflectiveOperationException) {
++                // The getter became public in API 33. Older devices may block reflection.
++                Settings.Global.getFloat(context.contentResolver,
++                    Settings.Global.ANIMATOR_DURATION_SCALE, 1f).toDouble()
++            }
++        }
+     }
+ 
+     private fun onAnimatorUpdate(animator: ValueAnimator?) {
+@@ -210,6 +218,7 @@
+     }
+ 
+     fun clear() {
++        stopAnimation(true)
+         getSVGADrawable()?.cleared = true
+         getSVGADrawable()?.clear()
+         // 清除对 drawable 的引用
+@@ -226,9 +235,12 @@
+     }
+ 
+     fun stopAnimation(clear: Boolean) {
+-        mAnimator?.cancel()
+-        mAnimator?.removeAllListeners()
+-        mAnimator?.removeAllUpdateListeners()
++        val animator = mAnimator
++        mAnimator = null
++        animator?.removeAllListeners()
++        animator?.removeAllUpdateListeners()
++        animator?.cancel()
++        isAnimating = false
+         getSVGADrawable()?.stop()
+         getSVGADrawable()?.cleared = clear
+     }
+@@ -238,10 +250,12 @@
+     }
+ 
+     fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
++        stopAnimation(false)
+         if (videoItem == null) {
+             setImageDrawable(null)
+         } else {
+             val drawable = SVGADrawable(videoItem, dynamicItem ?: SVGADynamicEntity())
++            drawable.antiAlias = mAntiAlias
+             drawable.cleared = true
+             setImageDrawable(drawable)
+         }
+@@ -301,19 +315,19 @@
+     private class AnimatorListener(view: SVGAImageView) : Animator.AnimatorListener {
+         private val weakReference = WeakReference<SVGAImageView>(view)
+ 
+-        override fun onAnimationRepeat(animation: Animator?) {
++        override fun onAnimationRepeat(animation: Animator) {
+             weakReference.get()?.callback?.onRepeat()
+         }
+ 
+-        override fun onAnimationEnd(animation: Animator?) {
++        override fun onAnimationEnd(animation: Animator) {
+             weakReference.get()?.onAnimationEnd(animation)
+         }
+ 
+-        override fun onAnimationCancel(animation: Animator?) {
++        override fun onAnimationCancel(animation: Animator) {
+             weakReference.get()?.isAnimating = false
+         }
+ 
+-        override fun onAnimationStart(animation: Animator?) {
++        override fun onAnimationStart(animation: Animator) {
+             weakReference.get()?.isAnimating = true
+         }
+     } // end of AnimatorListener
+@@ -322,8 +336,8 @@
+     private class AnimatorUpdateListener(view: SVGAImageView) : ValueAnimator.AnimatorUpdateListener {
+         private val weakReference = WeakReference<SVGAImageView>(view)
+ 
+-        override fun onAnimationUpdate(animation: ValueAnimator?) {
++        override fun onAnimationUpdate(animation: ValueAnimator) {
+             weakReference.get()?.onAnimatorUpdate(animation)
+         }
+     } // end of AnimatorUpdateListener
+-}+}
+--- upstream-relocated/java/dev/readablesvga/player/SVGAParser.kt
++++ svga-player/src/main/java/dev/readablesvga/player/SVGAParser.kt
+@@ -13,17 +13,19 @@
+ import java.util.concurrent.Executors
+ import java.util.concurrent.ThreadPoolExecutor
+ import java.util.concurrent.atomic.AtomicInteger
++import java.util.concurrent.atomic.AtomicBoolean
++import java.util.concurrent.atomic.AtomicReference
+ import java.util.zip.Inflater
+ import java.util.zip.ZipInputStream
+ 
+ /**
+  * Created by PonyCui 16/6/18.
+  */
+-private var fileLock: Int = 0
+-private var isUnzipping = false
++private val fileLock = Any()
+ 
+ class SVGAParser(context: Context?) {
+     private var mContext = context?.applicationContext
++    private val frameLock = Any()
+ 
+     init {
+         SVGACache.onCreate(context)
+@@ -38,6 +40,7 @@
+     interface ParseCompletion {
+         fun onComplete(videoItem: SVGAVideoEntity)
+         fun onError()
++        fun onError(error: Exception) { onError() }
+     }
+ 
+     interface PlayCallback{
+@@ -49,53 +52,58 @@
+         var noCache = false
+ 
+         open fun resume(url: URL, complete: (inputStream: InputStream) -> Unit, failure: (e: Exception) -> Unit): () -> Unit {
+-            var cancelled = false
++            val cancelled = AtomicBoolean(false)
++            val connection = AtomicReference<HttpURLConnection?>()
++            val callbackLock = Any()
++            fun disconnect(value: HttpURLConnection?) {
++                try { value?.disconnect() } catch (e: Exception) { LogUtils.error(TAG, e) }
++            }
+             val cancelBlock = {
+-                cancelled = true
++                synchronized(callbackLock) { cancelled.set(true) }
++                disconnect(connection.getAndSet(null))
+             }
+             threadPoolExecutor.execute {
++                var activeConnection: HttpURLConnection? = null
+                 try {
+-                    LogUtils.info(TAG, "================ svga file download start ================")
++                    if (cancelled.get()) return@execute
++                    require(url.protocol == "http" || url.protocol == "https") {
++                        "SVGA downloads support HTTP(S) only"
++                    }
+                     if (HttpResponseCache.getInstalled() == null && !noCache) {
+-                        LogUtils.error(TAG, "SVGAParser can not handle cache before install HttpResponseCache. see https://github.com/yyued/SVGAPlayer-Android#cache")
+-                        LogUtils.error(TAG, "在配置 HttpResponseCache 前 SVGAParser 无法缓存. 查看 https://github.com/yyued/SVGAPlayer-Android#cache ")
++                        LogUtils.warn(TAG, "HttpResponseCache is not installed; URL downloads are not cached")
+                     }
+-                    (url.openConnection() as? HttpURLConnection)?.let {
+-                        it.connectTimeout = 20 * 1000
+-                        it.requestMethod = "GET"
+-                        it.setRequestProperty("Connection", "close")
+-                        it.connect()
+-                        it.inputStream.use { inputStream ->
+-                            ByteArrayOutputStream().use { outputStream ->
+-                                val buffer = ByteArray(4096)
+-                                var count: Int
+-                                while (true) {
+-                                    if (cancelled) {
+-                                        LogUtils.warn(TAG, "================ svga file download canceled ================")
+-                                        break
+-                                    }
+-                                    count = inputStream.read(buffer, 0, 4096)
+-                                    if (count == -1) {
+-                                        break
+-                                    }
+-                                    outputStream.write(buffer, 0, count)
+-                                }
+-                                if (cancelled) {
+-                                    LogUtils.warn(TAG, "================ svga file download canceled ================")
+-                                    return@execute
+-                                }
+-                                ByteArrayInputStream(outputStream.toByteArray()).use {
+-                                    LogUtils.info(TAG, "================ svga file download complete ================")
+-                                    complete(it)
++                    val opened = url.openConnection() as? HttpURLConnection
++                        ?: throw IOException("URL did not provide an HTTP connection")
++                    activeConnection = opened
++                    connection.set(opened)
++                    if (cancelled.get()) return@execute
++                    opened.connectTimeout = 20_000
++                    opened.readTimeout = 20_000
++                    opened.requestMethod = "GET"
++                    opened.setRequestProperty("Connection", "close")
++                    opened.connect()
++                    opened.inputStream.use { input ->
++                        ByteArrayOutputStream().use { output ->
++                            val buffer = ByteArray(4096)
++                            var count = if (cancelled.get()) -1 else input.read(buffer)
++                            while (count > 0 && !cancelled.get()) {
++                                output.write(buffer, 0, count)
++                                count = input.read(buffer)
++                            }
++                            synchronized(callbackLock) {
++                                if (!cancelled.get()) {
++                                    ByteArrayInputStream(output.toByteArray()).use(complete)
+                                 }
+                             }
+                         }
+                     }
+                 } catch (e: Exception) {
+-                    LogUtils.error(TAG, "================ svga file download fail ================")
+-                    LogUtils.error(TAG, "error: ${e.message}")
+-                    e.printStackTrace()
+-                    failure(e)
++                    synchronized(callbackLock) {
++                        if (!cancelled.get()) failure(e)
++                    }
++                } finally {
++                    connection.compareAndSet(activeConnection, null)
++                    disconnect(activeConnection)
+                 }
+             }
+             return cancelBlock
+@@ -110,7 +118,7 @@
+         private val threadNum = AtomicInteger(0)
+         private var mShareParser = SVGAParser(null)
+ 
+-        internal var threadPoolExecutor = Executors.newCachedThreadPool { r ->
++        internal var threadPoolExecutor = Executors.newFixedThreadPool(4) { r ->
+             Thread(r, "SVGAParser-Thread-${threadNum.getAndIncrement()}")
+         }
+ 
+@@ -129,8 +137,30 @@
+     }
+ 
+     fun setFrameSize(frameWidth: Int, frameHeight: Int) {
+-        mFrameWidth = frameWidth
+-        mFrameHeight = frameHeight
++        synchronized(frameLock) {
++            mFrameWidth = frameWidth
++            mFrameHeight = frameHeight
++        }
++    }
++
++    private fun frameSize(): Pair<Int, Int> = synchronized(frameLock) { mFrameWidth to mFrameHeight }
++
++    /** Opens file I/O on a parser worker and transfers stream ownership to the decoder. */
++    fun decodeFromFile(file: File, callback: ParseCompletion?, playCallback: PlayCallback? = null) {
++        val targetSize = frameSize()
++        try {
++            threadPoolExecutor.execute {
++                try {
++                    val input = FileInputStream(file)
++                    decodeFromInputStreamWithSize(input, SVGACache.buildCacheKey(file.toURI().toString()),
++                        callback, true, playCallback, file.absolutePath, targetSize, dispatch = false)
++                } catch (e: Exception) {
++                    invokeErrorCallback(e, callback, file.absolutePath)
++                }
++            }
++        } catch (e: Exception) {
++            invokeErrorCallback(e, callback, file.absolutePath)
++        }
+     }
+ 
+     fun decodeFromAssets(
+@@ -142,17 +172,19 @@
+             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
+             return
+         }
++        val targetSize = frameSize()
+         LogUtils.info(TAG, "================ decode $name from assets ================")
+         threadPoolExecutor.execute {
+             try {
+                 mContext?.assets?.open(name)?.let {
+-                    this.decodeFromInputStream(
++                    this.decodeFromInputStreamWithSize(
+                             it,
+                             SVGACache.buildCacheKey("file:///assets/$name"),
+                             callback,
+                             true,
+                             playCallback,
+-                            alias = name
++                            alias = name,
++                            targetSize = targetSize
+                     )
+                 }
+             } catch (e: Exception) {
+@@ -171,6 +203,7 @@
+             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
+             return null
+         }
++        val targetSize = frameSize()
+         val urlPath = url.toString()
+         LogUtils.info(TAG, "================ decode from url: $urlPath ================")
+         val cacheKey = SVGACache.buildCacheKey(url);
+@@ -178,22 +211,23 @@
+             LogUtils.info(TAG, "this url cached")
+             threadPoolExecutor.execute {
+                 if (SVGACache.isDefaultCache()) {
+-                    this.decodeFromCacheKey(cacheKey, callback, alias = urlPath)
++                    this.decodeFromCacheKey(cacheKey, callback, urlPath, playCallback, targetSize)
+                 } else {
+-                    this.decodeFromSVGAFileCacheKey(cacheKey, callback, playCallback, alias = urlPath)
++                    this.decodeFromSVGAFileCacheKeyWithSize(cacheKey, callback, playCallback, urlPath, targetSize)
+                 }
+             }
+             return null
+         } else {
+             LogUtils.info(TAG, "no cached, prepare to download")
+             fileDownloader.resume(url, {
+-                this.decodeFromInputStream(
++                this.decodeFromInputStreamWithSize(
+                     it,
+                     cacheKey,
+                     callback,
+                     false,
+                     playCallback,
+-                    alias = urlPath
++                    alias = urlPath,
++                    targetSize = targetSize
+                 )
+             }, {
+                 LogUtils.error(
+@@ -214,13 +248,23 @@
+             playCallback: PlayCallback?,
+             alias: String? = null
+     ) {
++        decodeFromSVGAFileCacheKeyWithSize(cacheKey, callback, playCallback, alias, frameSize())
++    }
++
++    private fun decodeFromSVGAFileCacheKeyWithSize(
++        cacheKey: String,
++        callback: ParseCompletion?,
++        playCallback: PlayCallback?,
++        alias: String?,
++        targetSize: Pair<Int, Int>
++    ) {
+         threadPoolExecutor.execute {
+             try {
+                 LogUtils.info(TAG, "================ decode $alias from svga cachel file to entity ================")
+                 FileInputStream(SVGACache.buildSvgaFile(cacheKey)).use { inputStream ->
+                     readAsBytes(inputStream)?.let { bytes ->
+                         if (isZipFile(bytes)) {
+-                            this.decodeFromCacheKey(cacheKey, callback, alias)
++                            this.decodeFromCacheKey(cacheKey, callback, alias, playCallback, targetSize)
+                         } else {
+                             LogUtils.info(TAG, "inflate start")
+                             inflate(bytes)?.let {
+@@ -228,11 +272,11 @@
+                                 val videoItem = SVGAVideoEntity(
+                                     MovieEntity.ADAPTER.decode(it),
+                                     File(cacheKey),
+-                                    mFrameWidth,
+-                                    mFrameHeight
++                                    targetSize.first,
++                                    targetSize.second
+                                 )
+                                 LogUtils.info(TAG, "SVGAVideoEntity prepare start")
+-                                videoItem.prepare({
++                                prepareForPlayback(videoItem, {
+                                     LogUtils.info(TAG, "SVGAVideoEntity prepare success")
+                                     this.invokeCompleteCallback(videoItem, callback, alias)
+                                 },playCallback)
+@@ -265,30 +309,40 @@
+             playCallback: PlayCallback? = null,
+             alias: String? = null
+     ) {
++        decodeFromInputStreamWithSize(inputStream, cacheKey, callback, closeInputStream,
++                playCallback, alias, frameSize())
++    }
++
++    private fun decodeFromInputStreamWithSize(
++        inputStream: InputStream,
++        cacheKey: String,
++        callback: ParseCompletion?,
++        closeInputStream: Boolean,
++        playCallback: PlayCallback?,
++        alias: String?,
++        targetSize: Pair<Int, Int>,
++        dispatch: Boolean = true
++    ) {
+         if (mContext == null) {
+             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
++            if (closeInputStream) inputStream.close()
++            invokeErrorCallback(IllegalStateException("SVGAParser context is not initialized"), callback, alias)
+             return
+         }
+         LogUtils.info(TAG, "================ decode $alias from input stream ================")
+-        threadPoolExecutor.execute {
++        val decodeTask = Runnable {
+             try {
+                 readAsBytes(inputStream)?.let { bytes ->
+                     if (isZipFile(bytes)) {
+                         LogUtils.info(TAG, "decode from zip file")
+-                        if (!SVGACache.buildCacheDir(cacheKey).exists() || isUnzipping) {
+-                            synchronized(fileLock) {
+-                                if (!SVGACache.buildCacheDir(cacheKey).exists()) {
+-                                    isUnzipping = true
+-                                    LogUtils.info(TAG, "no cached, prepare to unzip")
+-                                    ByteArrayInputStream(bytes).use {
+-                                        unzip(it, cacheKey)
+-                                        isUnzipping = false
+-                                        LogUtils.info(TAG, "unzip success")
+-                                    }
+-                                }
++                        synchronized(fileLock) {
++                            if (!SVGACache.buildCacheDir(cacheKey).exists()) {
++                                LogUtils.info(TAG, "no cached, prepare to unzip")
++                                ByteArrayInputStream(bytes).use { unzip(it, cacheKey) }
++                                LogUtils.info(TAG, "unzip success")
+                             }
+                         }
+-                        this.decodeFromCacheKey(cacheKey, callback, alias)
++                        this.decodeFromCacheKey(cacheKey, callback, alias, playCallback, targetSize)
+                     } else {
+                         if (!SVGACache.isDefaultCache()) {
+                             // 如果 SVGACache 设置类型为 FILE
+@@ -296,7 +350,7 @@
+                                 SVGACache.buildSvgaFile(cacheKey).let { cacheFile ->
+                                     try {
+                                         cacheFile.takeIf { !it.exists() }?.createNewFile()
+-                                        FileOutputStream(cacheFile).write(bytes)
++                                        FileOutputStream(cacheFile).use { it.write(bytes) }
+                                     } catch (e: Exception) {
+                                         LogUtils.error(TAG, "create cache file fail.", e)
+                                         cacheFile.delete()
+@@ -310,11 +364,11 @@
+                             val videoItem = SVGAVideoEntity(
+                                     MovieEntity.ADAPTER.decode(it),
+                                     File(cacheKey),
+-                                    mFrameWidth,
+-                                    mFrameHeight
++                                    targetSize.first,
++                                    targetSize.second
+                             )
+                             LogUtils.info(TAG, "SVGAVideoEntity prepare start")
+-                            videoItem.prepare({
++                            prepareForPlayback(videoItem, {
+                                 LogUtils.info(TAG, "SVGAVideoEntity prepare success")
+                                 this.invokeCompleteCallback(videoItem, callback, alias)
+                             },playCallback)
+@@ -339,6 +393,18 @@
+                 LogUtils.info(TAG, "================ decode $alias from input stream end ================")
+             }
+         }
++        if (!dispatch) {
++            decodeTask.run()
++            return
++        }
++        try {
++            threadPoolExecutor.execute(decodeTask)
++        } catch (e: Exception) {
++            if (closeInputStream) {
++                try { inputStream.close() } catch (closeError: Exception) { e.addSuppressed(closeError) }
++            }
++            invokeErrorCallback(e, callback, alias)
++        }
+     }
+ 
+     /**
+@@ -370,6 +436,20 @@
+         this.decodeFromInputStream(inputStream, cacheKey, callback, closeInputStream,null)
+     }
+ 
++    private fun prepareForPlayback(
++        videoItem: SVGAVideoEntity,
++        callback: () -> Unit,
++        playCallback: PlayCallback?
++    ) {
++        try {
++            videoItem.validateForPlayback()
++            videoItem.prepare(callback, playCallback)
++        } catch (e: Exception) {
++            videoItem.clear()
++            throw e
++        }
++    }
++
+     private fun invokeCompleteCallback(
+             videoItem: SVGAVideoEntity,
+             callback: ParseCompletion?,
+@@ -390,86 +470,35 @@
+         LogUtils.error(TAG, "================ $alias parser error ================")
+         LogUtils.error(TAG, "$alias parse error", e)
+         Handler(Looper.getMainLooper()).post {
+-            callback?.onError()
++            callback?.onError(e)
+         }
+     }
+ 
+     private fun decodeFromCacheKey(
+-            cacheKey: String,
+-            callback: ParseCompletion?,
+-            alias: String?
+-    ) {
+-        LogUtils.info(TAG, "================ decode $alias from cache ================")
+-        LogUtils.debug(TAG, "decodeFromCacheKey called with cacheKey : $cacheKey")
+-        if (mContext == null) {
+-            LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
+-            return
+-        }
++        cacheKey: String,
++        callback: ParseCompletion?,
++        alias: String?,
++        playCallback: PlayCallback?,
++        targetSize: Pair<Int, Int>
++    ) {
+         try {
+             val cacheDir = SVGACache.buildCacheDir(cacheKey)
+-            File(cacheDir, "movie.binary").takeIf { it.isFile }?.let { binaryFile ->
+-                try {
+-                    LogUtils.info(TAG, "binary change to entity")
+-                    FileInputStream(binaryFile).use {
+-                        LogUtils.info(TAG, "binary change to entity success")
+-                        this.invokeCompleteCallback(
+-                                SVGAVideoEntity(
+-                                        MovieEntity.ADAPTER.decode(it),
+-                                        cacheDir,
+-                                        mFrameWidth,
+-                                        mFrameHeight
+-                                ),
+-                                callback,
+-                                alias
+-                        )
+-                    }
+-
+-                } catch (e: Exception) {
+-                    LogUtils.error(TAG, "binary change to entity fail", e)
+-                    cacheDir.delete()
+-                    binaryFile.delete()
+-                    throw e
+-                }
+-            }
+-            File(cacheDir, "movie.spec").takeIf { it.isFile }?.let { jsonFile ->
+-                try {
+-                    LogUtils.info(TAG, "spec change to entity")
+-                    FileInputStream(jsonFile).use { fileInputStream ->
+-                        ByteArrayOutputStream().use { byteArrayOutputStream ->
+-                            val buffer = ByteArray(2048)
+-                            while (true) {
+-                                val size = fileInputStream.read(buffer, 0, buffer.size)
+-                                if (size == -1) {
+-                                    break
+-                                }
+-                                byteArrayOutputStream.write(buffer, 0, size)
+-                            }
+-                            byteArrayOutputStream.toString().let {
+-                                JSONObject(it).let {
+-                                    LogUtils.info(TAG, "spec change to entity success")
+-                                    this.invokeCompleteCallback(
+-                                            SVGAVideoEntity(
+-                                                    it,
+-                                                    cacheDir,
+-                                                    mFrameWidth,
+-                                                    mFrameHeight
+-                                            ),
+-                                            callback,
+-                                            alias
+-                                    )
+-                                }
+-                            }
+-                        }
+-                    }
+-                } catch (e: Exception) {
+-                    LogUtils.error(TAG, "$alias movie.spec change to entity fail", e)
+-                    cacheDir.delete()
+-                    jsonFile.delete()
+-                    throw e
+-                }
+-            }
++            val binaryFile = File(cacheDir, "movie.binary")
++            val jsonFile = File(cacheDir, "movie.spec")
++            val videoItem = when {
++                binaryFile.isFile -> FileInputStream(binaryFile).use {
++                    SVGAVideoEntity(MovieEntity.ADAPTER.decode(it), cacheDir,
++                        targetSize.first, targetSize.second)
++                }
++                jsonFile.isFile -> FileInputStream(jsonFile).use {
++                    SVGAVideoEntity(JSONObject(it.bufferedReader(Charsets.UTF_8).readText()), cacheDir,
++                        targetSize.first, targetSize.second)
++                }
++                else -> throw FileNotFoundException("SVGA cache has neither movie.binary nor movie.spec")
++            }
++            prepareForPlayback(videoItem, { invokeCompleteCallback(videoItem, callback, alias) }, playCallback)
+         } catch (e: Exception) {
+-            this.invokeErrorCallback(e, callback, alias)
++            invokeErrorCallback(e, callback, alias)
+         }
+     }
+ 
+@@ -490,19 +519,19 @@
+ 
+     private fun inflate(byteArray: ByteArray): ByteArray? {
+         val inflater = Inflater()
+-        inflater.setInput(byteArray, 0, byteArray.size)
+-        val inflatedBytes = ByteArray(2048)
+-        ByteArrayOutputStream().use { inflatedOutputStream ->
+-            while (true) {
+-                val count = inflater.inflate(inflatedBytes, 0, 2048)
+-                if (count <= 0) {
+-                    break
+-                } else {
+-                    inflatedOutputStream.write(inflatedBytes, 0, count)
+-                }
+-            }
++        try {
++            inflater.setInput(byteArray)
++            val buffer = ByteArray(2048)
++            ByteArrayOutputStream().use { output ->
++                while (!inflater.finished()) {
++                    val count = inflater.inflate(buffer)
++                    if (count > 0) output.write(buffer, 0, count)
++                    else if (!inflater.finished()) throw IOException("Truncated or unsupported SVGA compressed stream")
++                }
++                return output.toByteArray()
++            }
++        } finally {
+             inflater.end()
+-            return inflatedOutputStream.toByteArray()
+         }
+     }
+ 
+@@ -558,7 +587,7 @@
+     private fun ensureUnzipSafety(outputFile: File, dstDirPath: String) {
+         val dstDirCanonicalPath = File(dstDirPath).canonicalPath
+         val outputFileCanonicalPath = outputFile.canonicalPath
+-        if (!outputFileCanonicalPath.startsWith(dstDirCanonicalPath)) {
++        if (!outputFileCanonicalPath.startsWith(dstDirCanonicalPath + File.separator)) {
+             throw IOException("Found Zip Path Traversal Vulnerability with $dstDirCanonicalPath")
+         }
+     }
+--- upstream-relocated/java/dev/readablesvga/player/SVGASoundManager.kt
++++ svga-player/src/main/java/dev/readablesvga/player/SVGASoundManager.kt
+@@ -11,6 +11,7 @@
+ import android.os.Build
+ import dev.readablesvga.player.utils.log.LogUtils
+ import java.io.FileDescriptor
++import java.util.WeakHashMap
+ 
+ /**
+  * Author : llk
+@@ -27,13 +28,18 @@
+ 
+     private val TAG = SVGASoundManager::class.java.simpleName
+ 
++    @Volatile
+     private var soundPool: SoundPool? = null
+ 
++    private val lock = Any()
++
+     private val soundCallBackMap: MutableMap<Int, SVGASoundCallBack> = mutableMapOf()
++    private val playbacks = WeakHashMap<SVGAAudioPlayback, Boolean>()
+ 
+     /**
+      * 音量设置，范围在 [0, 1] 之间
+      */
++    @Volatile
+     private var volume: Float = 1f
+ 
+     /**
+@@ -41,11 +47,8 @@
+      */
+     internal interface SVGASoundCallBack {
+ 
+-        // 音量发生变化
+-        fun onVolumeChange(value: Float)
+-
+-        // 音频加载完成
+-        fun onComplete()
++        // Every load reaches a terminal state, including native load failures.
++        fun onComplete(status: Int)
+     }
+ 
+     fun init() {
+@@ -53,26 +56,48 @@
+     }
+ 
+     fun init(maxStreams: Int) {
+-        LogUtils.debug(TAG, "**************** init **************** $maxStreams")
+-        if (soundPool != null) {
+-            return
+-        }
+-        soundPool = getSoundPool(maxStreams)
+-        soundPool?.setOnLoadCompleteListener { _, soundId, status ->
+-            LogUtils.debug(TAG, "SoundPool onLoadComplete soundId=$soundId status=$status")
+-            if (status == 0) { //加载该声音成功
+-                if (soundCallBackMap.containsKey(soundId)) {
+-                    soundCallBackMap[soundId]?.onComplete()
++        synchronized(lock) {
++            if (soundPool != null) return
++            val created = getSoundPool(maxStreams)
++            try {
++                created.setOnLoadCompleteListener { pool, soundId, status ->
++                    val callback = synchronized(lock) {
++                        if (pool === soundPool) soundCallBackMap.remove(soundId) else null
++                    }
++                    callback?.onComplete(status)
+                 }
++                soundPool = created
++            } catch (error: Throwable) {
++                try { created.release() } catch (cleanupError: Throwable) {
++                    if (cleanupError !== error) error.addSuppressed(cleanupError)
++                }
++                throw error
+             }
+         }
+     }
+ 
++    /** Releases the pool and terminates pending loads; callers must dispose cached entities too. */
+     fun release() {
+-        LogUtils.debug(TAG, "**************** release ****************")
+-        if (soundCallBackMap.isNotEmpty()) {
++        val (pool, callbacks) = synchronized(lock) {
++            val pool = soundPool
++            soundPool = null
++            val callbacks = soundCallBackMap.values.toList()
+             soundCallBackMap.clear()
+-        }
++            playbacks.clear()
++            pool to callbacks
++        }
++        var failure: Throwable? = null
++        fun cleanup(action: () -> Unit) {
++            try { action() } catch (error: Throwable) {
++                val previous = failure
++                if (previous == null) failure = error
++                else if (previous !== error) previous.addSuppressed(error)
++            }
++        }
++        cleanup { pool?.setOnLoadCompleteListener(null) }
++        cleanup { pool?.release() }
++        callbacks.forEach { callback -> cleanup { callback.onComplete(-1) } }
++        failure?.let { throw it }
+     }
+ 
+     /**
+@@ -91,22 +116,23 @@
+             return
+         }
+ 
+-        if (entity == null) {
+-            this.volume = volume
+-            val iterator = soundCallBackMap.entries.iterator()
+-            while (iterator.hasNext()) {
+-                val e = iterator.next()
+-                e.value.onVolumeChange(volume)
+-            }
+-            return
+-        }
+-
+-        val soundPool = soundPool ?: return
+-
+-        entity.audioList.forEach { audio ->
+-            val streamId = audio.playID ?: return
+-            soundPool.setVolume(streamId, volume, volume)
+-        }
++        val active = synchronized(lock) {
++            if (entity == null) this.volume = volume
++            playbacks.keys.filter { entity == null || it.videoItem === entity }
++        }
++        active.forEach { it.setVolume(volume) }
++    }
++
++    internal fun registerPlayback(playback: SVGAAudioPlayback) {
++        synchronized(lock) { playbacks[playback] = true }
++    }
++
++    internal fun unregisterPlayback(playback: SVGAAudioPlayback) {
++        synchronized(lock) { playbacks.remove(playback) }
++    }
++
++    internal fun setStreamVolume(streamId: Int, value: Float) {
++        soundPool?.setVolume(streamId, value, value)
+     }
+ 
+     /**
+@@ -144,13 +170,15 @@
+                       priority: Int): Int {
+         if (!checkInit()) return -1
+ 
+-        val soundId = soundPool!!.load(fd, offset, length, priority)
+-
++        // Registration and native completion share a lock, so a fast completion cannot
++        // arrive before its callback is registered. Invoke callbacks outside that lock.
++        val soundId = synchronized(lock) {
++            val id = soundPool?.load(fd, offset, length, priority) ?: 0
++            if (callBack != null && id > 0) soundCallBackMap[id] = callBack
++            id
++        }
+         LogUtils.debug(TAG, "load soundId=$soundId callBack=$callBack")
+-
+-        if (callBack != null && !soundCallBackMap.containsKey(soundId)) {
+-            soundCallBackMap[soundId] = callBack
+-        }
++        if (soundId <= 0) callBack?.onComplete(-1)
+         return soundId
+     }
+ 
+@@ -159,36 +187,37 @@
+ 
+         LogUtils.debug(TAG, "unload soundId=$soundId")
+ 
+-        soundPool!!.unload(soundId)
+-
+-        soundCallBackMap.remove(soundId)
++        synchronized(lock) {
++            try { soundPool?.unload(soundId) }
++            finally { soundCallBackMap.remove(soundId) }
++        }
+     }
+ 
+     internal fun play(soundId: Int): Int {
+         if (!checkInit()) return -1
+ 
+         LogUtils.debug(TAG, "play soundId=$soundId")
+-        return soundPool!!.play(soundId, volume, volume, 1, 0, 1.0f)
++        return soundPool?.play(soundId, volume, volume, 1, 0, 1.0f) ?: -1
+     }
+ 
+     internal fun stop(soundId: Int) {
+         if (!checkInit()) return
+ 
+         LogUtils.debug(TAG, "stop soundId=$soundId")
+-        soundPool!!.stop(soundId)
++        soundPool?.stop(soundId)
+     }
+ 
+     internal fun resume(soundId: Int) {
+         if (!checkInit()) return
+ 
+         LogUtils.debug(TAG, "stop soundId=$soundId")
+-        soundPool!!.resume(soundId)
++        soundPool?.resume(soundId)
+     }
+ 
+     internal fun pause(soundId: Int) {
+         if (!checkInit()) return
+ 
+         LogUtils.debug(TAG, "pause soundId=$soundId")
+-        soundPool!!.pause(soundId)
+-    }
+-}+        soundPool?.pause(soundId)
++    }
++}
+--- upstream-relocated/java/dev/readablesvga/player/SVGAVideoEntity.kt
++++ svga-player/src/main/java/dev/readablesvga/player/SVGAVideoEntity.kt
+@@ -18,12 +18,16 @@
+ import java.io.File
+ import java.io.FileInputStream
+ import java.io.FileOutputStream
+-import java.util.*
++import java.io.IOException
++import java.util.concurrent.atomic.AtomicBoolean
++import okio.ByteString
+ import kotlin.collections.ArrayList
+ 
+ /**
+  * Created by PonyCui on 16/6/18.
+  */
++private val audioFileLock = Any()
++
+ class SVGAVideoEntity {
+ 
+     private val TAG = "SVGAVideoEntity"
+@@ -43,13 +47,41 @@
+     internal var spriteList: List<SVGAVideoSpriteEntity> = emptyList()
+     internal var audioList: List<SVGAAudioEntity> = emptyList()
+     internal var soundPool: SoundPool? = null
+-    private var soundCallback: SVGASoundManager.SVGASoundCallBack? = null
++    internal var usesSharedSoundPool = false
++        private set
+     internal var imageMap = HashMap<String, Bitmap>()
+     private var mCacheDir: File
+     private var mFrameHeight = 0
+     private var mFrameWidth = 0
+-    private var mPlayCallback: SVGAParser.PlayCallback?=null
+-    private lateinit var mCallback: () -> Unit
++    private val preparationLock = Any()
++    private var preparationStarted = false
++    private var prepared = false
++    private var released = false
++    private var mCallback: (() -> Unit)? = null
++    private var decodingFailure: Throwable? = null
++
++    /**
++     * Cache weight: allocated bitmap storage plus encoded media payloads still retained in
++     * [movieItem]. It excludes JVM object graphs, GPU storage and SoundPool native buffers;
++     * this is a cache accounting estimate, not a measurement of total process memory.
++     */
++    val estimatedMemoryBytes: Long
++        get() = imageMap.values.sumOf { if (it.isRecycled) 0L else it.allocationByteCount.toLong() } +
++                (movieItem?.images?.values?.sumOf { it.size.toLong() } ?: 0L)
++
++    /** Drops preparation closures. Preparation normally does this itself before completion. */
++    fun releaseCallbackReferences() {
++        synchronized(preparationLock) { mCallback = null }
++    }
++
++    internal fun validateForPlayback() {
++        require(FPS > 0 && frames > 0) { "SVGA fps and frame count must be positive" }
++        require(videoSize.width.isFinite() && videoSize.width > 0 &&
++                videoSize.height.isFinite() && videoSize.height > 0) {
++            "SVGA viewBox must have positive finite dimensions"
++        }
++        decodingFailure?.let { throw IOException("SVGA image data could not be decoded", it) }
++    }
+ 
+     constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0)
+ 
+@@ -62,8 +94,10 @@
+         try {
+             parserImages(json)
+         } catch (e: Exception) {
++            decodingFailure = e
+             e.printStackTrace()
+         } catch (e: OutOfMemoryError) {
++            decodingFailure = e
+             e.printStackTrace()
+         }
+         resetSprites(json)
+@@ -90,8 +124,10 @@
+         try {
+             parserImages(entity)
+         } catch (e: Exception) {
++            decodingFailure = e
+             e.printStackTrace()
+         } catch (e: OutOfMemoryError) {
++            decodingFailure = e
+             e.printStackTrace()
+         }
+         resetSprites(entity)
+@@ -106,15 +142,34 @@
+     }
+ 
+     internal fun prepare(callback: () -> Unit, playCallback: SVGAParser.PlayCallback?) {
+-        mCallback = callback
+-        mPlayCallback = playCallback
+-        if (movieItem == null) {
+-            mCallback()
+-        } else {
+-            setupAudios(movieItem!!) {
+-                mCallback()
+-            }
+-        }
++        val alreadyPrepared = synchronized(preparationLock) {
++            check(!released) { "Cannot prepare a released SVGA entity" }
++            if (prepared) true else {
++                check(!preparationStarted) { "SVGA entity preparation is already in progress" }
++                preparationStarted = true
++                mCallback = callback
++                false
++            }
++        }
++        if (alreadyPrepared) {
++            callback()
++            return
++        }
++        val movie = movieItem
++        if (movie == null) completePreparation()
++        else setupAudios(movie, playCallback)
++    }
++
++    private fun completePreparation() {
++        val callback = synchronized(preparationLock) {
++            if (released || prepared) return
++            prepared = true
++            val result = mCallback
++            mCallback = null
++            soundPool?.setOnLoadCompleteListener(null)
++            result
++        }
++        callback?.invoke()
+     }
+ 
+     private fun parserImages(json: JSONObject) {
+@@ -122,13 +177,14 @@
+         imgJson.keys().forEach { imgKey ->
+             val filePath = generateBitmapFilePath(imgJson[imgKey].toString(), imgKey)
+             if (filePath.isEmpty()) {
+-                return
++                decodingFailure = IOException("SVGA image $imgKey is missing")
++                return@forEach
+             }
+             val bitmapKey = imgKey.replace(".matte", "")
+             val bitmap = createBitmap(filePath)
+             if (bitmap != null) {
+                 imageMap[bitmapKey] = bitmap
+-            }
++            } else decodingFailure = IOException("SVGA image $imgKey could not be decoded")
+         }
+     }
+ 
+@@ -151,25 +207,18 @@
+ 
+     private fun parserImages(obj: MovieEntity) {
+         obj.images?.entries?.forEach { entry ->
+-            val byteArray = entry.value.toByteArray()
+-            if (byteArray.count() < 4) {
+-                return@forEach
+-            }
+-            val fileTag = byteArray.slice(IntRange(0, 3))
+-            if (fileTag[0].toInt() == 73 && fileTag[1].toInt() == 68 && fileTag[2].toInt() == 51) {
+-                return@forEach
+-            }
+-            val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
+-            createBitmap(byteArray, filePath)?.let { bitmap ->
+-                imageMap[entry.key] = bitmap
+-            }
+-        }
+-    }
+-
+-    private fun createBitmap(byteArray: ByteArray, filePath: String): Bitmap? {
+-        val bitmap = SVGABitmapByteArrayDecoder.decodeBitmapFrom(byteArray, mFrameWidth, mFrameHeight)
+-        return bitmap ?: createBitmap(filePath)
+-    }
++            if (isAudioData(entry.value)) return@forEach
++            val bitmap = SVGABitmapByteArrayDecoder.decodeBitmapFrom(
++                entry.value.toByteArray(), mFrameWidth, mFrameHeight
++            ) ?: createBitmap(generateBitmapFilePath(entry.value.utf8(), entry.key))
++            if (bitmap != null) imageMap[entry.key] = bitmap
++            else decodingFailure = IOException("SVGA image ${entry.key} could not be decoded")
++        }
++    }
++
++    private fun isAudioData(data: ByteString): Boolean = data.size >= 3 &&
++            ((data[0].toInt() == 73 && data[1].toInt() == 68 && data[2].toInt() == 51) ||
++            (data[0].toInt() == -1 && data[1].toInt() == -5 && data[2].toInt() == -108))
+ 
+     private fun resetSprites(json: JSONObject) {
+         val mutableList: MutableList<SVGAVideoSpriteEntity> = mutableListOf()
+@@ -189,127 +238,97 @@
+         } ?: listOf()
+     }
+ 
+-    private fun setupAudios(entity: MovieEntity, completionBlock: () -> Unit) {
+-        if (entity.audios == null || entity.audios.isEmpty()) {
+-            run(completionBlock)
+-            return
+-        }
+-        setupSoundPool(entity, completionBlock)
+-        val audiosFileMap = generateAudioFileMap(entity)
+-        //repair when audioEntity error can not callback
+-        //如果audiosFileMap为空 soundPool?.load 不会走 导致 setOnLoadCompleteListener 不会回调 导致外层prepare不回调卡住
+-        if (audiosFileMap.size == 0) {
+-            run(completionBlock)
+-            return
+-        }
+-        this.audioList = entity.audios.map { audio ->
+-            return@map createSvgaAudioEntity(audio, audiosFileMap)
+-        }
+-    }
+-
+-    private fun createSvgaAudioEntity(audio: AudioEntity, audiosFileMap: HashMap<String, File>): SVGAAudioEntity {
+-        val item = SVGAAudioEntity(audio)
+-        val startTime = (audio.startTime ?: 0).toDouble()
+-        val totalTime = (audio.totalTime ?: 0).toDouble()
+-        if (totalTime.toInt() == 0) {
+-            // 除数不能为 0
+-            return item
+-        }
+-        // 直接回调文件,后续播放都不走
+-        mPlayCallback?.let {
+-            val fileList: MutableList<File> = ArrayList()
+-            audiosFileMap.forEach { entity ->
+-                fileList.add(entity.value)
+-            }
+-            it.onPlay(fileList)
+-            mCallback()
+-            return item
+-        }
+-
+-        audiosFileMap[audio.audioKey]?.let { file ->
+-            FileInputStream(file).use {
+-                val length = it.available().toDouble()
+-                val offset = ((startTime / totalTime) * length).toLong()
+-                if (SVGASoundManager.isInit()) {
+-                    item.soundID = SVGASoundManager.load(soundCallback,
+-                            it.fd,
+-                            offset,
+-                            length.toLong(),
+-                            1)
+-                } else {
+-                    item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
+-                }
+-            }
+-        }
+-        return item
+-    }
+-
+-    private fun generateAudioFile(audioCache: File, value: ByteArray): File {
+-        audioCache.createNewFile()
+-        FileOutputStream(audioCache).write(value)
+-        return audioCache
++    private fun setupAudios(entity: MovieEntity, playCallback: SVGAParser.PlayCallback?) {
++        audioList = entity.audios.map(::SVGAAudioEntity)
++        if (audioList.isEmpty()) {
++            completePreparation()
++            return
++        }
++        val files = generateAudioFileMap(entity)
++        if (playCallback != null) {
++            // External audio playback receives one file list per preparation, never once per track.
++            playCallback.onPlay(files.values.toList())
++            completePreparation()
++            return
++        }
++        val loadable = audioList.filter {
++            it.totalTime > 0 && it.startTime >= 0 && it.startTime < it.totalTime && files[it.audioKey] != null
++        }
++        if (loadable.isEmpty()) {
++            completePreparation()
++            return
++        }
++        usesSharedSoundPool = SVGASoundManager.isInit()
++        if (!usesSharedSoundPool) soundPool = generateSoundPool(entity)
++        if (!usesSharedSoundPool && soundPool == null) {
++            completePreparation()
++            return
++        }
++        var remaining = loadable.size
++        val localCallbacks = mutableMapOf<Int, (Int) -> Unit>()
++        soundPool?.setOnLoadCompleteListener { _, sampleId, status ->
++            val completion = synchronized(preparationLock) { localCallbacks.remove(sampleId) }
++            completion?.invoke(status)
++        }
++        loadable.forEach { item ->
++            val terminal = AtomicBoolean(false)
++            val onTerminal: (Int) -> Unit = { status ->
++                if (terminal.compareAndSet(false, true)) {
++                    val finished = synchronized(preparationLock) {
++                        if (status != 0) item.soundID = null
++                        remaining--
++                        remaining == 0
++                    }
++                    if (finished) completePreparation()
++                }
++            }
++            try {
++                FileInputStream(files.getValue(item.audioKey!!)).use { input ->
++                    val length = input.channel.size()
++                    val offset = (item.startTime.toDouble() / item.totalTime * length).toLong()
++                    synchronized(preparationLock) {
++                        val id = if (usesSharedSoundPool) {
++                            SVGASoundManager.load(object : SVGASoundManager.SVGASoundCallBack {
++                                override fun onComplete(status: Int) = onTerminal(status)
++                            }, input.fd, offset, length, 1)
++                        } else {
++                            soundPool?.load(input.fd, offset, length, 1) ?: 0
++                        }
++                        if (id > 0) {
++                            item.soundID = id
++                            if (!usesSharedSoundPool) localCallbacks[id] = onTerminal
++                        } else onTerminal(-1)
++                    }
++                }
++            } catch (e: Exception) {
++                LogUtils.error(TAG, e)
++                onTerminal(-1)
++            }
++        }
+     }
+ 
+     private fun generateAudioFileMap(entity: MovieEntity): HashMap<String, File> {
+-        val audiosDataMap = generateAudioMap(entity)
+-        val audiosFileMap = HashMap<String, File>()
+-        if (audiosDataMap.count() > 0) {
+-            audiosDataMap.forEach {
+-                val audioCache = SVGACache.buildAudioFile(it.key)
+-                audiosFileMap[it.key] =
+-                        audioCache.takeIf { file -> file.exists() } ?: generateAudioFile(
+-                                audioCache,
+-                                it.value
+-                        )
+-            }
+-        }
+-        return audiosFileMap
+-    }
+-
+-    private fun generateAudioMap(entity: MovieEntity): HashMap<String, ByteArray> {
+-        val audiosDataMap = HashMap<String, ByteArray>()
+-        entity.images?.entries?.forEach {
+-            val imageKey = it.key
+-            val byteArray = it.value.toByteArray()
+-            if (byteArray.count() < 4) {
+-                return@forEach
+-            }
+-            val fileTag = byteArray.slice(IntRange(0, 3))
+-            if (fileTag[0].toInt() == 73 && fileTag[1].toInt() == 68 && fileTag[2].toInt() == 51) {
+-                audiosDataMap[imageKey] = byteArray
+-            }else if(fileTag[0].toInt() == -1 && fileTag[1].toInt() == -5 && fileTag[2].toInt() == -108){
+-                audiosDataMap[imageKey] = byteArray
+-            }
+-        }
+-        return audiosDataMap
+-    }
+-
+-    private fun setupSoundPool(entity: MovieEntity, completionBlock: () -> Unit) {
+-        var soundLoaded = 0
+-        if (SVGASoundManager.isInit()) {
+-            soundCallback = object : SVGASoundManager.SVGASoundCallBack {
+-                override fun onVolumeChange(value: Float) {
+-                    SVGASoundManager.setVolume(value, this@SVGAVideoEntity)
+-                }
+-
+-                override fun onComplete() {
+-                    soundLoaded++
+-                    if (soundLoaded >= entity.audios.count()) {
+-                        completionBlock()
+-                    }
+-                }
+-            }
+-            return
+-        }
+-        soundPool = generateSoundPool(entity)
+-        LogUtils.info("SVGAParser", "pool_start")
+-        soundPool?.setOnLoadCompleteListener { _, _, _ ->
+-            LogUtils.info("SVGAParser", "pool_complete")
+-            soundLoaded++
+-            if (soundLoaded >= entity.audios.count()) {
+-                completionBlock()
+-            }
+-        }
++        val files = HashMap<String, File>()
++        generateAudioMap(entity).forEach { (key, data) ->
++            // Same audioKey in two movies may contain different bytes. Content identity avoids
++            // reusing the other movie's sound sample and keeps cache filenames within the root.
++            val file = SVGACache.buildAudioFile(data.sha256().hex())
++            synchronized(audioFileLock) {
++                if (!file.isFile || file.length() != data.size.toLong()) {
++                    FileOutputStream(file).use { it.write(data.toByteArray()) }
++                }
++            }
++            files[key] = file
++        }
++        return files
++    }
++
++    private fun generateAudioMap(entity: MovieEntity): HashMap<String, ByteString> {
++        val result = HashMap<String, ByteString>()
++        entity.images?.forEach { (key, value) ->
++            if (isAudioData(value)) result[key] = value
++        }
++        return result
+     }
+ 
+     private fun generateSoundPool(entity: MovieEntity): SoundPool? {
+@@ -330,18 +349,37 @@
+         }
+     }
+ 
++    /** Disposes shared resources. Call only after every owner has released its lease. */
+     fun clear() {
+-        if (SVGASoundManager.isInit()) {
+-            this.audioList.forEach {
+-                it.soundID?.let { id -> SVGASoundManager.unload(id) }
+-            }
+-            soundCallback = null
+-        }
+-        soundPool?.release()
+-        soundPool = null
+-        audioList = emptyList()
+-        spriteList = emptyList()
+-        imageMap.clear()
++        synchronized(preparationLock) {
++            if (released) return
++            released = true
++            mCallback = null
++            var failure: Throwable? = null
++            fun cleanup(action: () -> Unit) {
++                try { action() } catch (error: Throwable) {
++                    val previous = failure
++                    if (previous == null) failure = error
++                    else if (previous !== error) previous.addSuppressed(error)
++                }
++            }
++            try {
++                if (usesSharedSoundPool) {
++                    audioList.forEach { audio ->
++                        audio.soundID?.let { id -> cleanup { SVGASoundManager.unload(id) } }
++                    }
++                }
++                cleanup { soundPool?.setOnLoadCompleteListener(null) }
++                cleanup { soundPool?.release() }
++            } finally {
++                soundPool = null
++                audioList = emptyList()
++                spriteList = emptyList()
++                imageMap.clear()
++                movieItem = null
++                decodingFailure = null
++            }
++            failure?.let { throw it }
++        }
+     }
+ }
+-
+--- upstream-relocated/java/dev/readablesvga/player/drawer/SVGACanvasDrawer.kt
++++ svga-player/src/main/java/dev/readablesvga/player/drawer/SVGACanvasDrawer.kt
+@@ -6,7 +6,7 @@
+ import android.text.TextUtils
+ import android.widget.ImageView
+ import dev.readablesvga.player.SVGADynamicEntity
+-import dev.readablesvga.player.SVGASoundManager
++import dev.readablesvga.player.SVGAAudioPlayback
+ import dev.readablesvga.player.SVGAVideoEntity
+ import dev.readablesvga.player.entities.SVGAVideoShapeEntity
+ 
+@@ -14,7 +14,13 @@
+  * Created by cuiminghui on 2017/3/29.
+  */
+ 
+-internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity) : SGVADrawer(videoItem) {
++internal class SVGACanvasDrawer(
++    videoItem: SVGAVideoEntity,
++    val dynamicItem: SVGADynamicEntity,
++    private val audioPlayback: SVGAAudioPlayback
++) : SGVADrawer(videoItem) {
++
++    var antiAlias: Boolean = videoItem.antiAlias
+ 
+     private val sharedValues = ShareValues()
+     private val drawTextCache: HashMap<String, Bitmap> = hashMapOf()
+@@ -25,7 +31,7 @@
+ 
+     override fun drawFrame(canvas: Canvas, frameIndex: Int, scaleType: ImageView.ScaleType) {
+         super.drawFrame(canvas, frameIndex, scaleType)
+-        playAudio(frameIndex)
++        audioPlayback.onFrame(frameIndex)
+         this.pathCache.onSizeChanged(canvas)
+         val sprites = requestFrameSprites(frameIndex)
+         // Filter null sprites
+@@ -154,35 +160,6 @@
+         return endIndexList?.get(spriteIndex) ?: false
+     }
+ 
+-    private fun playAudio(frameIndex: Int) {
+-        this.videoItem.audioList.forEach { audio ->
+-            if (audio.startFrame == frameIndex) {
+-                if (SVGASoundManager.isInit()) {
+-                    audio.soundID?.let { soundID ->
+-                        audio.playID = SVGASoundManager.play(soundID)
+-                    }
+-                } else {
+-                    this.videoItem.soundPool?.let { soundPool ->
+-                        audio.soundID?.let { soundID ->
+-                            audio.playID = soundPool.play(soundID, 1.0f, 1.0f, 1, 0, 1.0f)
+-                        }
+-                    }
+-                }
+-
+-            }
+-            if (audio.endFrame <= frameIndex) {
+-                audio.playID?.let {
+-                    if (SVGASoundManager.isInit()) {
+-                        SVGASoundManager.stop(it)
+-                    } else {
+-                        this.videoItem.soundPool?.stop(it)
+-                    }
+-                }
+-                audio.playID = null
+-            }
+-        }
+-    }
+-
+     private fun shareFrameMatrix(transform: Matrix): Matrix {
+         val matrix = this.sharedValues.sharedMatrix()
+         matrix.postScale(scaleInfo.scaleFx, scaleInfo.scaleFy)
+@@ -208,8 +185,8 @@
+                 ?: return
+         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
+         val paint = this.sharedValues.sharedPaint()
+-        paint.isAntiAlias = videoItem.antiAlias
+-        paint.isFilterBitmap = videoItem.antiAlias
++        paint.isAntiAlias = antiAlias
++        paint.isFilterBitmap = antiAlias
+         paint.alpha = (sprite.frameEntity.alpha * 255).toInt()
+         if (sprite.frameEntity.maskPath != null) {
+             val maskPath = sprite.frameEntity.maskPath ?: return
+@@ -254,16 +231,17 @@
+                 drawTextCache[imageKey]?.let {
+                     textBitmap = it
+                 } ?: kotlin.run {
+-                    textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
++                    val createdBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
++                    textBitmap = createdBitmap
+                     val drawRect = Rect(0, 0, drawingBitmap.width, drawingBitmap.height)
+-                    val textCanvas = Canvas(textBitmap)
++                    val textCanvas = Canvas(createdBitmap)
+                     drawingTextPaint.isAntiAlias = true
+                     val fontMetrics = drawingTextPaint.getFontMetrics();
+                     val top = fontMetrics.top
+                     val bottom = fontMetrics.bottom
+                     val baseLineY = drawRect.centerY() - top / 2 - bottom / 2
+                     textCanvas.drawText(drawingText, drawRect.centerX().toFloat(), baseLineY, drawingTextPaint);
+-                    drawTextCache.put(imageKey, textBitmap as Bitmap)
++                    drawTextCache.put(imageKey, createdBitmap)
+                 }
+             }
+         }
+@@ -274,11 +252,12 @@
+             } ?: kotlin.run {
+                 it.paint.isAntiAlias = true
+ 
+-                textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
+-                val textCanvas = Canvas(textBitmap)
++                val createdBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
++                    textBitmap = createdBitmap
++                val textCanvas = Canvas(createdBitmap)
+                 textCanvas.translate(0f, ((drawingBitmap.height - it.height) / 2).toFloat())
+                 it.draw(textCanvas)
+-                drawTextCache.put(imageKey, textBitmap as Bitmap)
++                drawTextCache.put(imageKey, createdBitmap)
+             }
+         }
+ 
+@@ -304,16 +283,17 @@
+                 } else {
+                     StaticLayout(it.text, 0, it.text.length, it.paint, drawingBitmap.width, it.alignment, it.spacingMultiplier, it.spacingAdd, false)
+                 }
+-                textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
+-                val textCanvas = Canvas(textBitmap)
++                val createdBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
++                    textBitmap = createdBitmap
++                val textCanvas = Canvas(createdBitmap)
+                 textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                 layout.draw(textCanvas)
+-                drawTextCache.put(imageKey, textBitmap as Bitmap)
++                drawTextCache.put(imageKey, createdBitmap)
+             }
+         }
+         textBitmap?.let { textBitmap ->
+             val paint = this.sharedValues.sharedPaint()
+-            paint.isAntiAlias = videoItem.antiAlias
++            paint.isAntiAlias = antiAlias
+             paint.alpha = (sprite.frameEntity.alpha * 255).toInt()
+             if (sprite.frameEntity.maskPath != null) {
+                 val maskPath = sprite.frameEntity.maskPath ?: return@let
+@@ -327,7 +307,7 @@
+                 canvas.drawPath(path, paint)
+                 canvas.restore()
+             } else {
+-                paint.isFilterBitmap = videoItem.antiAlias
++                paint.isFilterBitmap = antiAlias
+                 canvas.drawBitmap(textBitmap, frameMatrix, paint)
+             }
+         }
+@@ -340,7 +320,7 @@
+             shape.shapePath?.let {
+                 val paint = this.sharedValues.sharedPaint()
+                 paint.reset()
+-                paint.isAntiAlias = videoItem.antiAlias
++                paint.isAntiAlias = antiAlias
+                 paint.alpha = (sprite.frameEntity.alpha * 255).toInt()
+                 val path = this.sharedValues.sharedPath()
+                 path.reset()
+@@ -527,7 +507,7 @@
+ //            val matteCanvas = shareMatteCanvas as Canvas
+ //            matteCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+ //            return matteCanvas
+-            return Canvas(sharedMatteBitmap)
++            return Canvas(requireNotNull(sharedMatteBitmap))
+         }
+     }
+ 
+@@ -548,7 +528,7 @@
+         fun buildPath(shape: SVGAVideoShapeEntity): Path {
+             if (!this.cache.containsKey(shape)) {
+                 val path = Path()
+-                path.set(shape.shapePath)
++                shape.shapePath?.let(path::set)
+                 this.cache[shape] = path
+             }
+             return this.cache[shape]!!
+--- upstream-relocated/java/dev/readablesvga/player/entities/SVGAAudioEntity.kt
++++ svga-player/src/main/java/dev/readablesvga/player/entities/SVGAAudioEntity.kt
+@@ -1,7 +1,6 @@
+ package dev.readablesvga.player.entities
+ 
+ import dev.readablesvga.player.proto.AudioEntity
+-import java.io.FileInputStream
+ 
+ internal class SVGAAudioEntity {
+ 
+@@ -11,7 +10,6 @@
+     val startTime: Int
+     val totalTime: Int
+     var soundID: Int? = null
+-    var playID: Int? = null
+ 
+     constructor(audioItem: AudioEntity) {
+         this.audioKey = audioItem.audioKey
+@@ -21,4 +19,4 @@
+         this.totalTime = audioItem.totalTime ?: 0
+     }
+ 
+-}+}

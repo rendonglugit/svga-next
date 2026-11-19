@@ -1,0 +1,122 @@
+--- official-relocated/AndroidManifest.xml
++++ benchmark-upstream/src/main/AndroidManifest.xml
+@@ -1,8 +1 @@
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-    package="dev.readablesvga.upstream">
+-
+-    <application android:allowBackup="true" android:label="@string/app_name">
+-
+-    </application>
+-
+-</manifest>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+--- official-relocated/java/com/opensource/svgaplayer/SVGADrawable.kt
++++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/SVGADrawable.kt
+@@ -33,7 +33,7 @@
+ 
+     private val drawer = SVGACanvasDrawer(videoItem, dynamicItem)
+ 
+-    override fun draw(canvas: Canvas?) {
++    override fun draw(canvas: Canvas) {
+         if (cleared) {
+             return
+         }
+--- official-relocated/java/com/opensource/svgaplayer/SVGAImageView.kt
++++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/SVGAImageView.kt
+@@ -301,19 +301,19 @@
+     private class AnimatorListener(view: SVGAImageView) : Animator.AnimatorListener {
+         private val weakReference = WeakReference<SVGAImageView>(view)
+ 
+-        override fun onAnimationRepeat(animation: Animator?) {
++        override fun onAnimationRepeat(animation: Animator) {
+             weakReference.get()?.callback?.onRepeat()
+         }
+ 
+-        override fun onAnimationEnd(animation: Animator?) {
++        override fun onAnimationEnd(animation: Animator) {
+             weakReference.get()?.onAnimationEnd(animation)
+         }
+ 
+-        override fun onAnimationCancel(animation: Animator?) {
++        override fun onAnimationCancel(animation: Animator) {
+             weakReference.get()?.isAnimating = false
+         }
+ 
+-        override fun onAnimationStart(animation: Animator?) {
++        override fun onAnimationStart(animation: Animator) {
+             weakReference.get()?.isAnimating = true
+         }
+     } // end of AnimatorListener
+@@ -322,7 +322,7 @@
+     private class AnimatorUpdateListener(view: SVGAImageView) : ValueAnimator.AnimatorUpdateListener {
+         private val weakReference = WeakReference<SVGAImageView>(view)
+ 
+-        override fun onAnimationUpdate(animation: ValueAnimator?) {
++        override fun onAnimationUpdate(animation: ValueAnimator) {
+             weakReference.get()?.onAnimatorUpdate(animation)
+         }
+     } // end of AnimatorUpdateListener
+--- official-relocated/java/com/opensource/svgaplayer/SVGAParser.kt
++++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/SVGAParser.kt
+@@ -19,7 +19,7 @@
+ /**
+  * Created by PonyCui 16/6/18.
+  */
+-private var fileLock: Int = 0
++private val fileLock = Any()
+ private var isUnzipping = false
+ 
+ class SVGAParser(context: Context?) {
+--- official-relocated/java/com/opensource/svgaplayer/drawer/SVGACanvasDrawer.kt
++++ benchmark-upstream/src/main/java/dev/readablesvga/upstream/drawer/SVGACanvasDrawer.kt
+@@ -256,7 +256,7 @@
+                 } ?: kotlin.run {
+                     textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
+                     val drawRect = Rect(0, 0, drawingBitmap.width, drawingBitmap.height)
+-                    val textCanvas = Canvas(textBitmap)
++                    val textCanvas = Canvas(requireNotNull(textBitmap))
+                     drawingTextPaint.isAntiAlias = true
+                     val fontMetrics = drawingTextPaint.getFontMetrics();
+                     val top = fontMetrics.top
+@@ -275,7 +275,7 @@
+                 it.paint.isAntiAlias = true
+ 
+                 textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
+-                val textCanvas = Canvas(textBitmap)
++                val textCanvas = Canvas(requireNotNull(textBitmap))
+                 textCanvas.translate(0f, ((drawingBitmap.height - it.height) / 2).toFloat())
+                 it.draw(textCanvas)
+                 drawTextCache.put(imageKey, textBitmap as Bitmap)
+@@ -305,7 +305,7 @@
+                     StaticLayout(it.text, 0, it.text.length, it.paint, drawingBitmap.width, it.alignment, it.spacingMultiplier, it.spacingAdd, false)
+                 }
+                 textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
+-                val textCanvas = Canvas(textBitmap)
++                val textCanvas = Canvas(requireNotNull(textBitmap))
+                 textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                 layout.draw(textCanvas)
+                 drawTextCache.put(imageKey, textBitmap as Bitmap)
+@@ -522,12 +522,12 @@
+         fun shareMatteCanvas(width: Int, height: Int): Canvas {
+             if (shareMatteCanvas == null) {
+                 sharedMatteBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
+-//                shareMatteCanvas = Canvas(sharedMatteBitmap)
++//                shareMatteCanvas = Canvas(requireNotNull(sharedMatteBitmap))
+             }
+ //            val matteCanvas = shareMatteCanvas as Canvas
+ //            matteCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+ //            return matteCanvas
+-            return Canvas(sharedMatteBitmap)
++            return Canvas(requireNotNull(sharedMatteBitmap))
+         }
+     }
+ 
+@@ -548,7 +548,7 @@
+         fun buildPath(shape: SVGAVideoShapeEntity): Path {
+             if (!this.cache.containsKey(shape)) {
+                 val path = Path()
+-                path.set(shape.shapePath)
++                shape.shapePath?.let(path::set)
+                 this.cache[shape] = path
+             }
+             return this.cache[shape]!!

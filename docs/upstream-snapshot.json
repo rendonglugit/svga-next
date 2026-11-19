@@ -1,0 +1,248 @@
+{
+  "repository": "https://github.com/svga/SVGAPlayer-Android",
+  "commit": "662d0dc11824e35a3f3fcd247f491efce2bf5ec5",
+  "namespace_change": "com.opensource.svgaplayer -> dev.readablesvga.player",
+  "files": [
+    {
+      "upstream_path": "library/src/main/AndroidManifest.xml",
+      "sha256": "e1b5d63c4b213c79e2d2f7d325f4b60673d099f65870412243a6bd54cd3b2437",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/IClickAreaListener.kt",
+      "sha256": "3a3cf7d5743c52ab79b9fcc8656a1fe644dc8f7db97bc1c4b088aa655621ea4e",
+      "attribution_comments": [
+        "/**\n * Created by miaojun on 2019/6/21.\n * mail:1290846731@qq.com\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGACache.kt",
+      "sha256": "41fb73d1ead7b942b410ebe19cfbc52664b05e49f65bd31959f679f6caf2cf82",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGACallback.kt",
+      "sha256": "9742068839c13455c5db2702c629524fa8e37fcc65b184bbbc982ea430274d71",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/3/30.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGAClickAreaListener.kt",
+      "sha256": "2bfe92ea1f9d0e018bfde3aa1ab0f9d5dab9d265d2f62b6261aebb1e5862c632",
+      "attribution_comments": [
+        "/**\n * Created by miaojun on 2019/6/21.\n * mail:1290846731@qq.com\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGADrawable.kt",
+      "sha256": "11ae98c827c788415fb56290eda4a8f7612e5cec476ca1299481baad9b277c5e",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGADynamicEntity.kt",
+      "sha256": "71d580a006f45396bba30da3ed5cff81af7e2b3d30db4b09b9d85dd45d732c67",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/3/30.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGAImageView.kt",
+      "sha256": "05559b2984d032a402a184f3ab050390618b95a8c1e74f238b1d45b36906a326",
+      "attribution_comments": [
+        "/**\n * Created by PonyCui on 2017/3/29.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGAParser.kt",
+      "sha256": "1869e8a3f484f08ba9b9a1fc061c40c34bd70d5ac06f4a8a4c130eebc6e61504",
+      "attribution_comments": [
+        "/**\n * Created by PonyCui 16/6/18.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGAPlayer.kt",
+      "sha256": "0f8fa2992be095923504d891dfb5e35821df41ff70b1faa18d7089d7dd7746ab",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/3/30.\n * @deprecated from 2.4.0\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGASoundManager.kt",
+      "sha256": "c00488b4a3d049a38c323618baa150e4fafdc70b72a7a7ec01a9421897460a13",
+      "attribution_comments": [
+        "/**\n * @author Devin\n *\n * Created on 2/24/21.\n */",
+        "/**\n * Author : llk\n * Time : 2020/10/24\n * Description : svga 音频加载管理类\n * 将 SoundPool 抽取到单例里边，规避 load 资源之后不回调 onLoadComplete 的问题。\n *\n * 需要对 SVGASoundManager 进行初始化\n *\n * 相关文章：Android SoundPool 崩溃问题研究\n * https://zhuanlan.zhihu.com/p/29985198\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/SVGAVideoEntity.kt",
+      "sha256": "83672d161633a986a2003451b94452b4615a36e9771fc70abb83e0a11cfa1e2e",
+      "attribution_comments": [
+        "/**\n * Created by PonyCui on 16/6/18.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/bitmap/BitmapSampleSizeCalculator.kt",
+      "sha256": "2e258f1f463e733e0193fb986356cd9fffb92be23154a19ff620531f43adee70",
+      "attribution_comments": [
+        "/**\n *\n * Create by im_dsd 2020/7/7 17:59\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/bitmap/SVGABitmapByteArrayDecoder.kt",
+      "sha256": "65a156f7046cf840ecaae888e2f206017cadd9c8c31dd545ab4c1fcec6d9023c",
+      "attribution_comments": [
+        "/**\n * 通过字节码解码 Bitmap\n *\n * Create by im_dsd 2020/7/7 17:50\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/bitmap/SVGABitmapDecoder.kt",
+      "sha256": "93010b5d23dfba5a00ab7a9a1c09c14e333a52cdd33f308199713aa0c598aaed",
+      "attribution_comments": [
+        "/**\n * Bitmap 解码器\n *\n * <T> 需要加载的数据类型\n *\n * Create by im_dsd 2020/7/7 17:39\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/bitmap/SVGABitmapFileDecoder.kt",
+      "sha256": "802b8f799fe31d6d219000c930e3a012e25d8d5acb724e7d62071e34420a3015",
+      "attribution_comments": [
+        "/**\n * 通过文件解码 Bitmap\n *\n * Create by im_dsd 2020/7/7 17:50\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/drawer/SGVADrawer.kt",
+      "sha256": "dc028716f50461f2902fcdacd94aad16f1ac45e6ddaccb2399436408c14357b9",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/3/29.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/drawer/SVGACanvasDrawer.kt",
+      "sha256": "40b3d067a45a007068a21b394d8ec295c2e89c676c7b81c0c0f35c7f0dc073b6",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/3/29.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/entities/SVGAAudioEntity.kt",
+      "sha256": "efaaf87b1c4c0200b3172f7d69445daa7068ff018e06eb4c483ad78716c6228f",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/entities/SVGAPathEntity.kt",
+      "sha256": "351af576b725378a51387d2a5803ca30d173bd6b29781f161aade5eb2f6d04a2",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/entities/SVGAVideoShapeEntity.kt",
+      "sha256": "997bd26637327e8d598ce8ee3bfd446bfd97d4d5dfee64b15125108c49fb84fc",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/2/22.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/entities/SVGAVideoSpriteEntity.kt",
+      "sha256": "f9f56e3f108adfe27b371f62edcdc1c7f8baa8aa76b5ee8d64a48d689ec99b3a",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2016/10/17.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/entities/SVGAVideoSpriteFrameEntity.kt",
+      "sha256": "c6ed9ea39d2098a18ed4967fb078dc9d07d23215c08b29b451eda300a134d0ee",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2016/10/17.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/AudioEntity.java",
+      "sha256": "f7c3e7b755b051af5ec9b06835105d4c130ea033a9e82efd8a09c9e7a7cd9a50",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/FrameEntity.java",
+      "sha256": "137f6693c1ba28a20e63fb11e897d6f902a28c579f5b0c8ca34dad4b0c2a5979",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/Layout.java",
+      "sha256": "b16c9f52e6e8471f9c3a4efe6ce06096eb638e142e10ef8be4e15fb99c67bec8",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/MovieEntity.java",
+      "sha256": "44a3af90283e90cf3e06c0b19fab3311ffd5b9bc10ddc827063a667074b1402f",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/MovieParams.java",
+      "sha256": "fad5e2da2efd2396bcb7b801ca451b57c083c3bc13d685fbc0c6b491d651f18d",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/ShapeEntity.java",
+      "sha256": "7c9d1e8df1483f9073678eae95ffc37e2db3d80e0bd81e2d2a2f7c82c08de357",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/SpriteEntity.java",
+      "sha256": "dd834f08a8b11fe16e2fd05241a1909501e710380421466c536ce17f1eb02d9a",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/proto/Transform.java",
+      "sha256": "d0f2fdbf3fff82b246ec8edb7e312961966fef76b45c07c7d04f8d82a72f8c7b",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/Pools.kt",
+      "sha256": "f39702ffab19984e1f657acf2549e17aaa6a382928aa7e8ef287a07f8417c2e9",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/SVGAScaleInfo.kt",
+      "sha256": "6c478d4e0602a0240d8e7d4b850d6aea8bd1b456556dbff42a1bd362dc87b62d",
+      "attribution_comments": [
+        "/**\n * Created by ubt on 2018/1/19.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/SVGAStructs.kt",
+      "sha256": "80f79cd0057e699c2b94f9a5ca0d14a00e4ba628b8f82daa6a5657307279997a",
+      "attribution_comments": [
+        "/**\n * Created by cuiminghui on 2017/3/29.\n */"
+      ]
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/log/DefaultLogCat.kt",
+      "sha256": "4980efa2ae672470f9edfc911c510f56832420844d723f86f52c28a31405b7a9",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/log/ILogger.kt",
+      "sha256": "a77e5aa7d0386ea35c76479207c4dc4d5888446e9326a677e7edcbbe16a56907",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/log/LogUtils.kt",
+      "sha256": "4c0a49a5bad799d190e3ce0b781256ffc7eab6dc05a204fc1f7df2f2c60c8234",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/java/com/opensource/svgaplayer/utils/log/SVGALogger.kt",
+      "sha256": "b3fe1a790858a423752022b30bdb762fa011d822712139c0214a89a32e854835",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/res/values/attrs.xml",
+      "sha256": "946d7fb3c78fd50d7c63612defd8acc99b5a307abea07c1c1d961b10b857c1d6",
+      "attribution_comments": []
+    },
+    {
+      "upstream_path": "library/src/main/res/values/strings.xml",
+      "sha256": "8315083213ec518adde5f0c8f71ce784e62149fc2869a87c5f72ae247ea357a1",
+      "attribution_comments": []
+    }
+  ]
+}

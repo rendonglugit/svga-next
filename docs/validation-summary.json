@@ -1,0 +1,149 @@
+{
+  "date": "2026-11-19",
+  "test_count": 64,
+  "test_suites": [
+    {
+      "module": "svga-core",
+      "suite": "dev.readablesvga.core.ByteSizedCacheTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-core/build/test-results/test/TEST-dev.readablesvga.core.ByteSizedCacheTest.xml"
+    },
+    {
+      "module": "svga-core",
+      "suite": "dev.readablesvga.core.GenerationGateTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-core/build/test-results/test/TEST-dev.readablesvga.core.GenerationGateTest.xml"
+    },
+    {
+      "module": "svga-core",
+      "suite": "dev.readablesvga.core.ResourceLeaseTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-core/build/test-results/test/TEST-dev.readablesvga.core.ResourceLeaseTest.xml"
+    },
+    {
+      "module": "svga-player",
+      "suite": "dev.readablesvga.player.PlayerResourceTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-player/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.player.PlayerResourceTest.xml"
+    },
+    {
+      "module": "svga-runtime",
+      "suite": "dev.readablesvga.runtime.ManagedSvgaImageViewTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.runtime.ManagedSvgaImageViewTest.xml"
+    },
+    {
+      "module": "svga-runtime",
+      "suite": "dev.readablesvga.runtime.SvgaLoaderTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.runtime.SvgaLoaderTest.xml"
+    },
+    {
+      "module": "svga-runtime",
+      "suite": "dev.readablesvga.runtime.SvgaRequestTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "report": "svga-runtime/build/test-results/testDebugUnitTest/TEST-dev.readablesvga.runtime.SvgaRequestTest.xml"
+    }
+  ],
+  "lint": [
+    {
+      "module": "svga-player",
+      "issues": [
+        {
+          "id": "DiscouragedPrivateApi",
+          "severity": "Warning",
+          "message": "Reflective access to getDurationScale, which is not part of the public SDK and therefore likely to change in future Android releases"
+        },
+        {
+          "id": "PrivateApi",
+          "severity": "Warning",
+          "message": "Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        },
+        {
+          "id": "ObsoleteSdkInt",
+          "severity": "Warning",
+          "message": "Unnecessary; `SDK_INT` is never < 21"
+        },
+        {
+          "id": "ObsoleteSdkInt",
+          "severity": "Warning",
+          "message": "Unnecessary; `SDK_INT` is always >= 21"
+        },
+        {
+          "id": "ObsoleteSdkInt",
+          "severity": "Warning",
+          "message": "Unnecessary; `SDK_INT` is never < 21"
+        },
+        {
+          "id": "ObsoleteSdkInt",
+          "severity": "Warning",
+          "message": "Unnecessary; `SDK_INT` is always >= 21"
+        },
+        {
+          "id": "ObsoleteSdkInt",
+          "severity": "Warning",
+          "message": "Unnecessary; `SDK_INT` is always >= 21"
+        },
+        {
+          "id": "StaticFieldLeak",
+          "severity": "Warning",
+          "message": "Do not place Android context classes in static fields (static reference to `SVGAParser` which has field `mContext` pointing to `Context`); this is a memory leak"
+        }
+      ]
+    },
+    {
+      "module": "svga-runtime",
+      "issues": []
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "svga-core/build/libs/svga-core-0.1.0.jar",
+      "bytes": 19744,
+      "sha256": "d5239694f7e945b0dc7e51b028a8626e3c82946476afa5e4f25952a6b6973932"
+    },
+    {
+      "path": "svga-player/build/outputs/aar/svga-player-release.aar",
+      "bytes": 213391,
+      "sha256": "578c888dd97d86c20ce6aa70d48ca29e33cdcc177a85871cdb0615a239315a5b"
+    },
+    {
+      "path": "svga-runtime/build/outputs/aar/svga-runtime-release.aar",
+      "bytes": 41234,
+      "sha256": "12ef8c1e54964d0bb33d53a790cca7d3210dbcb7132475479f574dd0e1a3108a"
+    },
+    {
+      "path": "sample/build/outputs/apk/debug/sample-debug.apk",
+      "bytes": 1493928,
+      "sha256": "53f24eb4cb8f187b80dd52f67296d5c9c48f2f9be1f72ea73bd48cdb3337718f"
+    }
+  ],
+  "combined_build": "passed",
+  "local_maven_publication": "passed",
+  "independent_java_consumer_build": "passed",
+  "limits": [
+    "No on-device execution",
+    "No device performance benchmark",
+    "No complete vochata integration build",
+    "Eight player lint warnings retained"
+  ],
+  "distribution_text_update": {
+    "scope": "Documentation and packaged notices refreshed; functional source unchanged",
+    "tests": "Previous 64-test functional result retained; no new functional tests required",
+    "artifact_build": "passed"
+  }
+}
