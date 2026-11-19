@@ -32,3 +32,5 @@
 
 - Managed runtime can opt out of the upstream View’s immediate detach stop to retain the same playback until its queued ownership cleanup runs. Direct player views retain their original behavior.
 - `SVGAVideoSpriteFrameEntity` flattens the frame matrix, alpha and layout bounds into an unboxed `float[11]` array (`[a, c, tx, b, d, ty, alpha, x, y, width, height]`), eliminating thousands of `Matrix` and `SVGARect` heap allocations per animation while keeping zero-allocation playback in `SVGACanvasDrawer`.
+- Replaced the global `synchronized(fileLock)` with per-key `KeyedFileLocks` and implemented atomic cache staging via `publishCacheFile` to eliminate concurrency bottlenecks and corrupted disk caches.
+- Added pure disk prefetch (`prefetchToDisk`) and in-flight download multiplexing to share network requests across callers without early bitmap or audio allocations.

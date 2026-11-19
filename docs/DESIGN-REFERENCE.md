@@ -11,7 +11,7 @@
 | 同资源请求复用 | loader in-flight key | key 包含采样尺寸；不是业务下载队列 |
 | attach / visibility 控制 | ManagedSvgaImageView | 释放自己的播放和资源引用 |
 | 核心库与业务接入分开 | core / player / runtime / sample | 不依赖具体应用的业务代码或私有组件 |
-| 按帧数组和原 protobuf 释放 | 首版保留官方数据结构 | 需要渲染与内存实测后再作为独立变更 |
+| 按帧数组和原 protobuf 释放 | FloatArray(11) 打包仿射与布局 | 消除每帧 Matrix 与 SVGARect 分配，绘制时复用共享变换矩阵 |
 
 官方已具备 matte、动态内容、sprite pool、共享 Paint/Matrix 和绘制缓存，首版保留这些能力。位图采样和音频兼容行为继续由播放内核负责，资源管理模块集中处理所有权、请求和生命周期。
 
