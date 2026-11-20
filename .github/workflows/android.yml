@@ -18,7 +18,7 @@ jobs:
       - name: Audit source boundaries
         run: python3 tools/audit_sources.py
       - name: Test and assemble
-        run: ./gradlew :svga-core:test :svga-player:testDebugUnitTest :svga-runtime:testDebugUnitTest :sample:testDebugUnitTest :sample:assembleDebug :svga-player:assembleRelease :svga-runtime:assembleRelease
+        run: ./gradlew :svga-core:test :svga-player:testDebugUnitTest :svga-runtime:testDebugUnitTest :svga-compat:testDebugUnitTest :sample:testDebugUnitTest :sample:assembleDebug :svga-player:assembleRelease :svga-runtime:assembleRelease :svga-compat:assembleRelease
       - uses: actions/upload-artifact@v6
         with:
           name: svga-next-builds

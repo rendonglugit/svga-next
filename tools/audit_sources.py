@@ -8,18 +8,24 @@ root = Path(__file__).resolve().parents[1]
 assert "Apache License" in (root / "LICENSE").read_text()
 assert "662d0dc11824e35a3f3fcd247f491efce2bf5ec5" in (root / "NOTICE").read_text()
 source_files = []
-for module in ("svga-core", "svga-player", "svga-runtime", "benchmark-upstream", "sample"):
+for module in ("svga-core", "svga-player", "svga-runtime", "benchmark-upstream", "sample", "svga-compat"):
     for path in sorted((root / module / "src").rglob("*")):
         if not path.is_file():
             continue
         assert path.suffix not in {".smali", ".dex", ".apk", ".aar"}, path
         if path.suffix in {".kt", ".java", ".xml"}:
             text = path.read_text()
-            assert "com.opensource.svgaplayer" not in text, path
-            if path.suffix in {".kt", ".java"}:
+            if module == "svga-compat":
+                if path.suffix in {".kt", ".java"}:
+                    assert "package com.opensource.svgaplayer" in text, path
+            elif path.name == "CompatDemoActivity.kt":
                 assert "package dev.svganext." in text, path
+            else:
+                assert "com.opensource.svgaplayer" not in text, path
+                if path.suffix in {".kt", ".java"}:
+                    assert "package dev.svganext." in text, path
         source_files.append({"path": str(path.relative_to(root)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-for module in ("svga-core", "svga-player", "svga-runtime", "benchmark-upstream"):
+for module in ("svga-core", "svga-player", "svga-runtime", "benchmark-upstream", "svga-compat"):
     legal = root / module / "src/main/resources/META-INF/svga-next" / module
     assert (legal / "LICENSE").read_bytes() == (root / "LICENSE").read_bytes()
     assert (legal / "NOTICE").read_bytes() == (root / "NOTICE").read_bytes()

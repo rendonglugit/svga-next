@@ -1,0 +1,17 @@
+SVGA-Next
+
+The svga-player rendering sources and the sample assets are derived from
+SVGAPlayer-Android, https://github.com/svga/SVGAPlayer-Android
+at commit 662d0dc11824e35a3f3fcd247f491efce2bf5ec5, licensed under Apache-2.0.
+Original copyright and contributor notices are preserved in those sources.
+
+Modifications: independent namespace, current Android build, safer parsing,
+resource ownership and per-drawable playback state. See docs/UPSTREAM.md.
+
+The svga-core and svga-runtime modules are independently authored here.
+They implement explicit resource ownership, cache accounting, request
+coalescing and Android view lifecycle management.
+
+The benchmark-upstream module contains the same pinned official snapshot,
+relocated and adapted for the current SDK/compiler, for sample comparisons
+only. See docs/PERFORMANCE.md.
