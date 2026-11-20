@@ -9,7 +9,7 @@ plugins {
 }
 allprojects {
     group = "io.github.rendonglugit"
-    version = "0.1.0"
+    version = "0.1.1"
 }
 
 subprojects {

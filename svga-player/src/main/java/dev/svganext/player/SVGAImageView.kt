@@ -134,6 +134,12 @@ open class SVGAImageView @JvmOverloads constructor(
         play(range, reverse)
     }
 
+    @JvmOverloads
+    fun startAnimation(startFrame: Int, endFrame: Int, reverse: Boolean = false) {
+        val range = SVGARange(startFrame, (endFrame - startFrame + 1).coerceAtLeast(0))
+        startAnimation(range, reverse)
+    }
+
     private fun play(range: SVGARange?, reverse: Boolean) {
         val drawable = getSVGADrawable() ?: return
         val videoItem = drawable.videoItem

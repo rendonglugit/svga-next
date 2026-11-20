@@ -49,6 +49,12 @@ open class SVGAVideoEntity {
     internal var soundPool: SoundPool? = null
     internal var usesSharedSoundPool = false
     internal var imageMap = HashMap<String, Bitmap>()
+
+    /**
+     * Unmodifiable view of decoded bitmap assets.
+     */
+    val bitmaps: Map<String, Bitmap>
+        get() = java.util.Collections.unmodifiableMap(imageMap)
     internal var mCacheDir: File
     internal var mFrameHeight = 0
     internal var mFrameWidth = 0

@@ -58,6 +58,25 @@ open class SVGADrawable internal constructor(
         drawer.drawFrame(canvas, currentFrame, scaleType)
     }
 
+    /**
+     * Draws a specific frame onto [canvas] with the specified [scaleType].
+     * Useful for off-screen rendering, generating thumbnails, or static frame inspection.
+     *
+     * @param canvas Target canvas to draw onto.
+     * @param frameIndex The index of the frame to render (0-based).
+     * @param scaleType Scaling behavior, defaults to this drawable's [scaleType].
+     * @param playAudio Whether to trigger audio playback for this frame, defaults to false for static frame drawing.
+     */
+    @JvmOverloads
+    fun drawFrame(
+        canvas: Canvas,
+        frameIndex: Int,
+        scaleType: ImageView.ScaleType = this.scaleType,
+        playAudio: Boolean = false
+    ) {
+        drawer.drawFrame(canvas, frameIndex, scaleType, playAudio)
+    }
+
     override fun setAlpha(alpha: Int) {
 
     }

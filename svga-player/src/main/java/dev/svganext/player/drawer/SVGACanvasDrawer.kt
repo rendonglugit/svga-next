@@ -30,8 +30,14 @@ internal class SVGACanvasDrawer(
     private var endIndexList: Array<Boolean>? = null
 
     override fun drawFrame(canvas: Canvas, frameIndex: Int, scaleType: ImageView.ScaleType) {
+        drawFrame(canvas, frameIndex, scaleType, playAudio = true)
+    }
+
+    fun drawFrame(canvas: Canvas, frameIndex: Int, scaleType: ImageView.ScaleType, playAudio: Boolean) {
         super.drawFrame(canvas, frameIndex, scaleType)
-        audioPlayback.onFrame(frameIndex)
+        if (playAudio) {
+            audioPlayback.onFrame(frameIndex)
+        }
         this.pathCache.onSizeChanged(canvas)
         val sprites = requestFrameSprites(frameIndex)
         // Filter null sprites

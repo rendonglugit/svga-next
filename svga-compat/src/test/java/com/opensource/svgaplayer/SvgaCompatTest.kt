@@ -103,5 +103,12 @@ class SvgaCompatTest {
         val entity = SVGAVideoEntity(testMovie(), dummyFile)
         val drawable = SVGADrawable(entity, dynamic)
         assertNotNull(drawable)
+
+        val drawer = com.opensource.svgaplayer.drawer.SVGACanvasDrawer(entity, dynamic)
+        assertNotNull(drawer)
+        val bitmap = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        drawer.drawFrame(canvas, 0)
+        entity.clear()
     }
 }

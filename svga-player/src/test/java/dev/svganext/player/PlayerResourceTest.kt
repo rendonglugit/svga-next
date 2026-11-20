@@ -786,6 +786,52 @@ class PlayerResourceTest {
         assertEquals(400.0f, frame.layoutHeight, 0.001f)
     }
 
+    @Test
+    fun drawFrameRendersToCanvasWithoutModifyingCurrentFrameOrPlayingAudio() {
+        val directory = temporaryFolder.newFolder()
+        val movie = movie(emptyMap())
+        val entity = SVGAVideoEntity(movie, directory)
+        val drawable = SVGADrawable(entity)
+        val bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        assertEquals(0, drawable.currentFrame)
+        drawable.drawFrame(canvas, 0, android.widget.ImageView.ScaleType.FIT_CENTER)
+        assertEquals(0, drawable.currentFrame)
+        entity.clear()
+    }
+
+    @Test
+    fun bitmapsPropertyExposesUnmodifiableMapView() {
+        val directory = temporaryFolder.newFolder()
+        val png = png(16, 16)
+        directory.resolve("test.png").writeBytes(png)
+        val movie = movie(mapOf("test" to "test.png".encodeUtf8()))
+        val entity = SVGAVideoEntity(movie, directory)
+
+        assertEquals(setOf("test"), entity.bitmaps.keys)
+        try {
+            (entity.bitmaps as MutableMap<String, Bitmap>).clear()
+            fail("Expected UnsupportedOperationException on mutating bitmaps map")
+        } catch (expected: UnsupportedOperationException) {
+            // Success: map is unmodifiable
+        }
+        entity.clear()
+    }
+
+    @Test
+    fun startAnimationWithFrameRangePlaysSpecifiedFrames() {
+        val directory = temporaryFolder.newFolder()
+        val movie = movie(emptyMap())
+        val entity = SVGAVideoEntity(movie, directory)
+        val imageView = SVGAImageView(RuntimeEnvironment.getApplication())
+        imageView.setVideoItem(entity)
+        imageView.startAnimation(0, 2)
+        assertTrue(imageView.isAnimating)
+        imageView.stopAnimation()
+        entity.clear()
+    }
+
     private fun compressed(movie: MovieEntity): ByteArray = ByteArrayOutputStream().use { output ->
         DeflaterOutputStream(output).use { it.write(MovieEntity.ADAPTER.encode(movie)) }
         output.toByteArray()

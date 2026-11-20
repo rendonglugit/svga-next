@@ -70,6 +70,14 @@ class CompatDemoActivity : Activity() {
         }
         column.addView(viewsLayout)
 
+        val previewImageView = android.widget.ImageView(this).apply {
+            visibility = android.view.View.GONE
+            setPadding(0, dp(10), 0, dp(10))
+        }
+        column.addView(previewImageView, LinearLayout.LayoutParams(dp(120), dp(120)).apply {
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        })
+
         statusText = TextView(this).apply {
             text = "状态：就绪"
             textSize = 13f
@@ -94,6 +102,37 @@ class CompatDemoActivity : Activity() {
 
         action("动态替换文字 (SVGADynamicEntity)") {
             loadDynamicAsset("heartbeat.svga")
+        }
+
+        action("📸 抽帧单帧到普通 ImageView (drawFrame)") {
+            val entity = currentEntity
+            if (entity != null) {
+                val bmp = android.graphics.Bitmap.createBitmap(dp(120), dp(120), android.graphics.Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bmp)
+                val drawer = com.opensource.svgaplayer.drawer.SVGACanvasDrawer(entity)
+                drawer.drawFrame(canvas, 10)
+                previewImageView.setImageBitmap(bmp)
+                previewImageView.visibility = android.view.View.VISIBLE
+                statusText.text = "状态：已使用 SVGACanvasDrawer.drawFrame 离屏渲染第 10 帧到下方原生 ImageView！"
+                Toast.makeText(this, "抽帧渲染完成", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "请先加载动画", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        action("⏩ 指定帧区间播放 10~30 帧 (startAnimation)") {
+            firstView.startAnimation(10, 30)
+            secondView.startAnimation(10, 30)
+            statusText.text = "状态：View 1 & 2 正在循环播放 10~30 帧区间！"
+        }
+
+        action("🔍 纹理只读自省 (entity.bitmaps)") {
+            val entity = currentEntity
+            if (entity != null) {
+                statusText.text = "状态：bitmaps 包含 ${entity.bitmaps.size} 张纹理: ${entity.bitmaps.keys}"
+            } else {
+                Toast.makeText(this, "请先加载动画", Toast.LENGTH_SHORT).show()
+            }
         }
 
         action("⚠️ 模拟旧业务调用 videoItem.clear()") {

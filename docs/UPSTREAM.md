@@ -21,6 +21,7 @@
 9. 停止或替换播放不再触发自然完成通知；每 Drawable 单独保存 antiAlias 和音频 stream 状态。
 10. 动画时长使用 Double/Long，避免 60 fps 的整数截断和长序列溢出。系统动画 scale 为 0 时展示范围终帧、完成一次，不创建 Animator，也不修改宿主全局设置；正 scale 继续补偿以保持媒体的帧率时间。
 11. 错误回调支持保留异常 cause 的重载；文件在工作线程打开，网络取消使用线程安全标记、超时及断开连接。
+12. `SVGADrawable` 增加标准公开 `drawFrame(canvas, frameIndex, scaleType, playAudio)` 离屏单帧绘制方法，默认不播放音频；`SVGAVideoEntity` 暴露只读 `bitmaps` 映射；`svga-compat` 补充 `com.opensource.svgaplayer.drawer.SVGACanvasDrawer` 兼容垫片以严格对齐官方 2.6.1 原有可见性。
 
 `SVGADrawable.clear()` 只清当前播放；共享实体的最终 owner/lease 才能调用 `SVGAVideoEntity.clear()`。这项所有权语义与原官方直接清实体的行为有区别，接入时优先使用 runtime。
 
