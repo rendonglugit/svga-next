@@ -376,6 +376,19 @@ open class SVGAVideoEntity {
         }
     }
 
+    open fun clearAudioList() {
+        synchronized(preparationLock) {
+            if (usesSharedSoundPool) {
+                audioList.forEach { audio ->
+                    audio.soundID?.let { id ->
+                        try { SVGASoundManager.unload(id) } catch (_: Throwable) {}
+                    }
+                    audio.soundID = null
+                }
+            }
+        }
+    }
+
     /** Disposes shared resources. Call only after every owner has released its lease. */
     open fun clear() {
         synchronized(preparationLock) {

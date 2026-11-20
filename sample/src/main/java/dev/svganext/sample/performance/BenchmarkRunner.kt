@@ -193,7 +193,7 @@ class BenchmarkRunner internal constructor(
             .put("captured_at_utc", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date()))
             .put("device", JSONObject().put("model", Build.MODEL).put("manufacturer", Build.MANUFACTURER).put("sdk", Build.VERSION.SDK_INT))
             .put("debuggable", activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
-            .put("readable_version", "0.1.1").put("official_commit", "662d0dc11824e35a3f3fcd247f491efce2bf5ec5")
+            .put("readable_version", "0.1.2").put("official_commit", "662d0dc11824e35a3f3fcd247f491efce2bf5ec5")
             .put("asset", config.asset).put("asset_sha256", assetSha256).put("width_px", config.width).put("height_px", config.height)
             .put("warmup_per_workload", 1).put("samples", config.samples).put("playback_ms", config.playbackMillis)
             .put("engine_order", JSONArray(engineOrder.map { it.id })).put("engines", JSONArray(reports))

@@ -24,6 +24,7 @@ class SvgaCompatTest {
     @Before
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        SVGAActivitiesCache.instance.clear()
     }
 
     @Test
@@ -47,7 +48,7 @@ class SvgaCompatTest {
     }
 
     @Test
-    fun safeClearPreventsDisposalWhileBoundToActiveView() {
+    fun safeClearPreventsDisposalWhileBoundToActiveViewOrCache() {
         val dummyFile = File(context.cacheDir, "test_cache")
         dummyFile.mkdirs()
         val entity = SVGAVideoEntity(testMovie(), dummyFile)
@@ -56,24 +57,57 @@ class SvgaCompatTest {
         assertFalse(entity.isReleased)
 
         val view1 = Any()
+        val view2 = Any()
         entity.attachView(view1)
+        entity.attachView(view2)
         assertTrue(entity.isBoundToActiveView)
 
-        // SafeClear should intercept clear() because view1 is attached
+        // SafeClear should intercept clear() because views are attached
         entity.clear()
         assertFalse(entity.isReleased)
 
-        // Detach view1
+        // Detaching view1 still leaves view2 active, so entity remains released = false
         entity.detachView(view1)
-        assertFalse(entity.isBoundToActiveView)
+        assertTrue(entity.isBoundToActiveView)
+        assertFalse(entity.isReleased)
 
-        // Now clear() should proceed
-        entity.clear()
+        // Detaching last view (not cached) triggers immediate cliff-drop release
+        entity.detachView(view2)
+        assertFalse(entity.isBoundToActiveView)
         assertTrue(entity.isReleased)
     }
 
     @Test
-    fun svgaImageViewBindsAndUnbindsCompatEntity() {
+    fun cacheRetainsEntityEvenWhenViewDetachesUntilEvicted() {
+        val dummyFile = File(context.cacheDir, "test_cache_cached")
+        dummyFile.mkdirs()
+        val entity = SVGAVideoEntity(testMovie(), dummyFile)
+        val key = "anim_heartbeat"
+
+        SVGAActivitiesCache.instance.put(key, entity)
+        assertTrue(entity.isCachedInPool)
+
+        val view = Any()
+        entity.attachView(view)
+
+        // View detaches while entity is still in cache
+        entity.detachView(view)
+        assertFalse(entity.isBoundToActiveView)
+        // Must NOT release because it is retained in cache
+        assertFalse(entity.isReleased)
+
+        // Cache hit returns the same entity
+        val cached = SVGAActivitiesCache.instance.get(key)
+        assertSame(entity, cached)
+
+        // Evicting from cache when no views are bound releases it immediately
+        SVGAActivitiesCache.instance.remove(key)
+        assertFalse(entity.isCachedInPool)
+        assertTrue(entity.isReleased)
+    }
+
+    @Test
+    fun svgaImageViewBindsAndUnbindsCompatEntityWithCliffDrop() {
         val dummyFile = File(context.cacheDir, "test_cache_view")
         dummyFile.mkdirs()
         val entity = SVGAVideoEntity(testMovie(), dummyFile)
@@ -82,9 +116,76 @@ class SvgaCompatTest {
         imageView.setVideoItem(entity)
         assertTrue(entity.isBoundToActiveView)
 
-        // Setting another video item or null unbinds entity
+        // Setting null unbinds and, because not cached, releases immediately
         imageView.setVideoItem(null)
         assertFalse(entity.isBoundToActiveView)
+        assertTrue(entity.isReleased)
+    }
+
+    @Test
+    fun svgaImageViewClearReleasesUncachedEntity() {
+        val dummyFile = File(context.cacheDir, "test_cache_clear")
+        dummyFile.mkdirs()
+        val entity = SVGAVideoEntity(testMovie(), dummyFile)
+
+        val imageView = SVGAImageView(context)
+        imageView.setVideoItem(entity)
+        assertTrue(entity.isBoundToActiveView)
+
+        imageView.clear()
+        assertFalse(entity.isBoundToActiveView)
+        assertTrue(entity.isReleased)
+    }
+
+    @Test
+    fun svgaImageViewAppointFrameAndLifecycleAPIs() {
+        val dummyFile = File(context.cacheDir, "test_cache_appoint")
+        dummyFile.mkdirs()
+        val entity = SVGAVideoEntity(testMovie(), dummyFile)
+
+        val imageView = SVGAImageView(context)
+        imageView.startAfterAttached = true
+        assertTrue(imageView.startAfterAttached)
+
+        imageView.startAnimationFromAppointFrame(entity, 3)
+        assertTrue(entity.isBoundToActiveView)
+
+        imageView.startAnimationFromAppointFrame(5)
+        imageView.clear()
+        assertTrue(entity.isReleased)
+    }
+
+    @Test
+    fun svgaSoundManagerAndActivitiesCacheJavaCompat() {
+        SVGASoundManager.init()
+        assertTrue(SVGASoundManager.isInit())
+        SVGASoundManager.setVolume(0.5f)
+
+        val dummyFile = File(context.cacheDir, "test_cache_sound")
+        dummyFile.mkdirs()
+        val entity = SVGAVideoEntity(testMovie(), dummyFile)
+        SVGASoundManager.setVolume(0f, entity)
+
+        entity.clearAudioList()
+        entity.clearCallback()
+
+        assertNotNull(SVGAActivitiesCache.instance)
+        assertNotNull(SVGAActivitiesCache.Companion.instance)
+        SVGAActivitiesCache.instance.setMaxSize(10 * 1024 * 1024)
+        SVGAActivitiesCache.instance.trimCache(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
+
+        val simpleCallback = object : SVGASimpleCallback() {
+            var stepCalled = false
+            override fun onStep(frame: Int, percentage: Double) {
+                stepCalled = true
+            }
+        }
+        val imageView = SVGAImageView(context)
+        imageView.callback = simpleCallback
+        simpleCallback.onStep(1, 0.1)
+        assertTrue(simpleCallback.stepCalled)
+
+        entity.clear()
     }
 
     @Test

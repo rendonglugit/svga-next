@@ -2,7 +2,7 @@ plugins { id("com.android.application"); kotlin("android") }
 android {
     namespace = "dev.svganext.sample"
     compileSdk = 35
-    defaultConfig { applicationId = "dev.svganext.sample"; minSdk = 21; targetSdk = 35; versionCode = 2; versionName = "0.1.1" }
+    defaultConfig { applicationId = "dev.svganext.sample"; minSdk = 21; targetSdk = 35; versionCode = 3; versionName = "0.1.2" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     testOptions { unitTests.isIncludeAndroidResources = true }
 }

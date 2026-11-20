@@ -2,7 +2,7 @@
 
 面向现代 Android 的下一代高性能、生命周期感知且无内存泄漏的 SVGA 播放与资源管理库。播放内核基于 Apache-2.0 官方 SVGAPlayer 深度重构；资源管理层独立实现共享引用租约（ResourceLease）、按字节计量的 LRU 缓存、并发请求合并（Request Coalescing）及 View 生命周期安全绑定。
 
-这是独立命名空间的首版工程（`0.1.1`），可与旧版 `com.opensource.svgaplayer` 并行接入。资源管理层不依赖其他应用的代码、资源或私有组件。
+这是独立命名空间的首版工程（`0.1.2`），可与旧版 `com.opensource.svgaplayer` 并行接入。资源管理层不依赖其他应用的代码、资源或私有组件。
 
 ## 从哪里开始读
 
@@ -11,7 +11,7 @@
 | `svga-core` | 纯 Kotlin 的资源所有权和缓存 | `ResourceLease → ByteSizedCache → GenerationGate` |
 | `svga-player` | 格式解析、采样、Canvas 绘制、动态内容和音频 | `SVGAParser → SVGAVideoEntity → SVGADrawable → SVGACanvasDrawer` |
 | `svga-runtime` | Android 加载、缓存复用、取消和 View 管理 | `SvgaLoader → ManagedSvgaImageView` |
-| `svga-compat` | 存量项目 0 代码改动平替（保留旧包名、Safe-Clear、自动初始化） | `SVGAImageView → SVGAParser → SafeClear` |
+| `svga-compat` | 存量项目 0 代码改动平替（保留旧包名、内置 SVGAActivitiesCache、断崖式释放与 Safe-Clear、Java 静态兼容、自动初始化） | `SVGAImageView → SVGAParser → SVGAActivitiesCache` |
 | `sample` | 两个 View 共享资源、切换请求、遮罩和音频示例 | `MainActivity` |
 | `benchmark-upstream` | 示例对照使用的官方源码快照，仅必要编译适配 | `SVGAParser → SVGADrawable` |
 
@@ -56,10 +56,10 @@
 
 ```kotlin
 // 方式 A（新项目推荐）：完整现代化运行时（包含租约所有权管理、请求合并、字节 LRU 缓存与生命周期感知的 Managed View）
-implementation("io.github.rendonglugit:svga-runtime:0.1.1")
+implementation("io.github.rendonglugit:svga-runtime:0.1.2")
 
 // 方式 B（存量项目极速平替）：官方旧版完全兼容层（保留 com.opensource.svgaplayer 包名、0 行代码修改、Safe-Clear 防崩、自动初始化）
-implementation("io.github.rendonglugit:svga-compat:0.1.1")
+implementation("io.github.rendonglugit:svga-compat:0.1.2")
 ```
 
 ---
@@ -192,7 +192,7 @@ val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
 存量项目有两个迁移选择：**0 代码改动极速平替（`svga-compat`）** 或 **彻底现代化重构（`svga-runtime`）**。
 
 #### 路线 0：极速无感平替（强烈推荐，0 行代码与 XML 修改）
-* **依赖**：`io.github.rendonglugit:svga-compat:0.1.1`
+* **依赖**：`io.github.rendonglugit:svga-compat:0.1.2`
 * **适用场景**：希望在几个小时内快速上线止血、不想重构几十个布局与业务类、或者项目集成了硬编码旧包名的**闭源第三方 SDK**。
 * **接入方式**：
   在工程根 `build.gradle.kts` 中配置 Gradle 依赖替换规则（Dependency Substitution）：
@@ -200,7 +200,7 @@ val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
   configurations.all {
       resolutionStrategy.dependencySubstitution {
           substitute(module("com.github.yyued:SVGAPlayer-Android"))
-              .using(module("io.github.rendonglugit:svga-compat:0.1.1"))
+              .using(module("io.github.rendonglugit:svga-compat:0.1.2"))
               .because("一键无感升级到 SVGA-Next 高性能内核")
       }
   }
@@ -208,20 +208,22 @@ val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
 * **核心保障**：
   1. **完全保留旧包名**：保留 `com.opensource.svgaplayer.*`，所有 Java/Kotlin 的 `import` 与 XML 布局标签原封不动；
   2. **XML `app:source` 完美兼容**：老布局文件中的 `app:source="xxx.svga"` 照常自动解析并起播；
-  3. **Safe-Clear 防崩拦截**：老代码中在 `onDestroy` 里调用的 `videoItem.clear()`，若该实体仍被其他活跃 View 共享在播，将自动被安全拦截，彻底杜绝并发 View 黑屏；
-  4. **冷启动自动初始化**：内置 `SvgaInitProvider`，应用启动时自动初始化 `SVGACache` 与音频池，`Application` 代码零侵入；
-  5. **享受新内核性能红利**：底层完全跑在 SVGA-Next 的 `FloatArray(11)` 零对象分配绘制、`KeyedFileLocks` 分段读写锁与原子发布机制上。
+  3. **断崖式释放与 Safe-Clear 双重保护**：View 解绑或清空时自动注销；若无活跃 View 展示且未被缓存持有，即刻主动释放底层 Bitmap 引用，内存即刻垂直回落；若多个 View 共享在播，自动拦截踩踏破坏，彻底杜绝并发 View 黑屏；
+  4. **内置 SVGAActivitiesCache 实体复用**：按字节计量的 LRU 内存缓存，高频重复动效（麦位波纹、礼物等）直接命中内存复用，彻底抹平反复解码的锯齿波动；配合 `SvgaInitProvider` 响应系统 LowMemory 分级修剪；
+  5. **全量 Java 静态互调兼容**：`SVGASoundManager` 与 `SVGAActivitiesCache` 所有公共入口标注 `@JvmStatic`，Java 静态直接调用无缝通过；
+  6. **补齐常用历史 API**：内置 `startAnimationFromAppointFrame`、`clearAudioList`、`SVGASimpleCallback` 及兼容多签名的 `ParseCompletion.onError`；
+  7. **享受新内核性能红利**：底层完全跑在 SVGA-Next 的 `FloatArray(11)` 零对象分配绘制、`KeyedFileLocks` 分段读写锁与原子发布机制上。
 
 ---
 
 #### 路线 A：源码级渐进替换（仅替换底层内核）
-* 依赖 `io.github.rendonglugit:svga-player:0.1.1`。
+* 依赖 `io.github.rendonglugit:svga-player:0.1.2`。
 * 将代码中的 `com.opensource.svgaplayer` 全局批量替换为 `dev.svganext.player`。
 * 保留原有的 `SVGAImageView` 与 `SVGAParser` 调用方式。
 * **局限**：依然保留手动的资源释放逻辑，无法自动享受多 View 共享安全租约与请求并发合并。
 
 #### 路线 B：全面升级 Runtime 架构（推荐用于新模块与深度重构）
-* 依赖 `io.github.rendonglugit:svga-runtime:0.1.1`。
+* 依赖 `io.github.rendonglugit:svga-runtime:0.1.2`。
 * 将 XML 中的 `SVGAImageView` 替换为 `ManagedSvgaImageView`，**并移除 XML 中的 `app:source`**，改用 `svgaView.bind(loader, request)`。
 * 引入全局 `SvgaLoader` 单例，彻底移除业务层原本调用的 `videoItem?.clear()`，所有权交给租约管理。
 * **收益**：从架构根源上消灭内存泄漏，支持直播间复杂动效多 View 共享相同解码资源。

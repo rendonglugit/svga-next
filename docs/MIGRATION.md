@@ -74,7 +74,7 @@ SVGA-Next 提供了三条迁移路径，业务可根据改动预算进行选择�
 configurations.all {
     resolutionStrategy.dependencySubstitution {
         substitute(module("com.github.yyued:SVGAPlayer-Android"))
-            .using(module("io.github.rendonglugit:svga-compat:0.1.1"))
+            .using(module("io.github.rendonglugit:svga-compat:0.1.2"))
             .because("0 行代码修改一键无感升级到 SVGA-Next 高性能内核")
     }
 }
@@ -83,7 +83,7 @@ configurations.all {
 或者直接引入依赖（若无传递依赖冲突）：
 ```kotlin
 dependencies {
-    implementation("io.github.rendonglugit:svga-compat:0.1.1")
+    implementation("io.github.rendonglugit:svga-compat:0.1.2")
 }
 ```
 
@@ -106,7 +106,7 @@ dependencies {
 // build.gradle.kts
 dependencies {
     // 移除: implementation("com.github.yyued:SVGAPlayer-Android:x.x.x")
-    implementation("io.github.rendonglugit:svga-player:0.1.1")
+    implementation("io.github.rendonglugit:svga-player:0.1.2")
 }
 ```
 
@@ -141,7 +141,7 @@ dependencies {
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("io.github.rendonglugit:svga-runtime:0.1.1")
+    implementation("io.github.rendonglugit:svga-runtime:0.1.2")
 }
 ```
 

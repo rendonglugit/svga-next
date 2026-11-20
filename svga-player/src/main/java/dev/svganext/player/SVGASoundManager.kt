@@ -182,7 +182,7 @@ object SVGASoundManager {
         return soundId
     }
 
-    internal fun unload(soundId: Int) {
+    fun unload(soundId: Int) {
         if (!checkInit()) return
 
         LogUtils.debug(TAG, "unload soundId=$soundId")
@@ -200,7 +200,7 @@ object SVGASoundManager {
         return soundPool?.play(soundId, volume, volume, 1, 0, 1.0f) ?: -1
     }
 
-    internal fun stop(soundId: Int) {
+    fun stop(soundId: Int) {
         if (!checkInit()) return
 
         LogUtils.debug(TAG, "stop soundId=$soundId")

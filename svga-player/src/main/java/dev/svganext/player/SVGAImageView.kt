@@ -223,7 +223,7 @@ open class SVGAImageView @JvmOverloads constructor(
         callback?.onFinished()
     }
 
-    fun clear() {
+    open fun clear() {
         stopAnimation(true)
         getSVGADrawable()?.cleared = true
         getSVGADrawable()?.clear()
