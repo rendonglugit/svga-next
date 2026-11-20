@@ -2,9 +2,10 @@
 
 本文档面向此前已经在项目中接入过官方 `com.opensource.svgaplayer`（或其历史衍生分支）的开发者。
 
-> [!CAUTION]
-> **重要前置说明：SVGA-Next 无法“无感升级”**  
-> 由于包名命名空间变更、底层资源所有权模型重构、XML 自动加载机制调整以及播放回调时序修正，**任何存量项目都需要进行代码适配与回归排查**。直接替换依赖而不修改业务代码会导致编译错误或运行时异常。
+> [!NOTE]
+> **关于升级成本与“无感平替”**  
+> * **若希望 0 代码改动极速平替**：直接使用本项目提供的 **`svga-compat` 兼容模块**（见路线 0）。它完全保留了 `com.opensource.svgaplayer` 包名，内置 Safe-Clear 防崩机制与自动初始化，业务代码与 XML 布局**一行都不用改**！
+> * **若升级到全新 `svga-runtime`**：因底层架构与所有权模型全面现代化，需按照迁移指南进行代码适配（见路线 B）。
 
 ---
 
@@ -33,33 +34,65 @@
 
 | 变更项 | 官方 SVGAPlayer (`com.opensource`) | SVGA-Next (`dev.svganext`) | 影响与改动要求 |
 | :--- | :--- | :--- | :--- |
-| **Maven 坐标与包名** | `com.github.yyued:SVGAPlayer-Android` / `com.opensource.svgaplayer` | `dev.svganext:svga-runtime` / `dev.svganext:svga-player` | 必须全局替换 `import` 语句与 XML 标签。 |
-| **资源清理机制** | 手动调用 `SVGAVideoEntity.clear()` 释放位图 | 严禁手动调用 `entity.clear()`，由 `ResourceLease` 自动管理 | **高危**：老业务中的 `videoItem?.clear()` 必须全部删除，否则会导致其他共享 View 崩溃。 |
+| **Maven 坐标与包名** | `com.github.yyued:SVGAPlayer-Android` / `com.opensource.svgaplayer` | `dev.svganext:svga-runtime` / `dev.svganext:svga-player` | 若使用 `svga-compat` 则免改；若直接用新库须全局替换 `import` 与 XML 标签。 |
+| **资源清理机制** | 手动调用 `SVGAVideoEntity.clear()` 释放位图 | 严禁手动调用 `entity.clear()`，由 `ResourceLease` 自动管理 | `svga-compat` 内置 Safe-Clear 保护；`runtime` 下须全量移除业务层的 `videoItem.clear()`。 |
 | **`Drawable.clear()` 语义** | 会级联清理或重置播放资源 | 仅清除当前 Drawable 的播放帧状态，不触碰共享 Entity | 属于正常安全加固，不影响单 View 使用。 |
-| **XML `app:source`** | 支持 XML 声明文件并自动异步解析 | `ManagedSvgaImageView` **强制禁用自动解析** | 若在 XML 中配置了 `app:source`，升级后**动画不会显示**，必须改用代码 `bind()`。 |
+| **XML `app:source`** | 支持 XML 声明文件并自动异步解析 | `ManagedSvgaImageView` 禁用自动解析，但 `svga-compat` 完整支持 | `svga-compat` 零修改即播；升级至 `ManagedSvgaImageView` 需改用 `bind()`。 |
 | **`onFinished` 回调时序** | 主动 `stopAnimation()` 或 Detach 取消时偶发误触发 | **仅在自然播放到最后一帧完成时触发** | 检查业务是否误依赖了主动 stop 时触发的 onFinished。 |
-| **音频初始化** | 部分老版本内置或需单独初始化 | 必须显式调用 `SVGASoundManager.init()` | 若未初始化，解码器默认关闭音频解析，导致动画完全静音。 |
+| **音频初始化** | 部分老版本内置或需单独初始化 | 必须显式调用 `SVGASoundManager.init()` | `svga-compat` 会在冷启动自动初始化；使用底层库须在 Application 中补调。 |
 | **磁盘缓存目录** | `${cacheDir}/` 根目录或默认哈希目录 | 隔离在 `${cacheDir}/svga-next/` | 旧版本下载过的网络动画**无法直接被新版识别为命中**，会触发一次重新下载。 |
 
 ---
 
 ## 迁移路线选择
 
-SVGA-Next 提供了两条迁移路径，业务可根据改动预算进行选择：
+SVGA-Next 提供了三条迁移路径，业务可根据改动预算进行选择：
 
 ```
-                    ┌───────────────────────────────┐
-                    │       选择你的迁移路线        │
-                    └───────────────┬───────────────┘
-                                    │
-           ┌────────────────────────┴────────────────────────┐
-           ▼                                                 ▼
-【路线 A：渐进式内核替换】                         【路线 B：完整升级 Runtime（强烈推荐）】
-* 改动量：极小（仅改包名与依赖）                   * 改动量：中等（改用 Managed View 与 Loader）
-* 依赖：svga-player                                * 依赖：svga-runtime
-* 保留：原有 SVGAParser + SVGAImageView 代码       * 彻底解决：内存泄漏、多 View 共享安全、请求防重
-* 获得：绘制零分配、分段锁防卡顿、原子文件防损坏    * 架构：现代化 Application 单例 Loader + 自动租约管理
+                    ┌───────────────────────────────────────────────┐
+                    │               选择你的迁移路线                │
+                    └───────────────────────┬───────────────────────┘
+                                            │
+           ┌────────────────────────────────┼────────────────────────────────┐
+           ▼                                ▼                                ▼
+【路线 0：svga-compat 极速平替】   【路线 A：渐进式内核替换】       【路线 B：现代 Runtime 架构】
+* 改动量：0 行代码、0 行 XML       * 改动量：极小（批量改包名）     * 改动量：中等（重构 View 与绑定）
+* 依赖：svga-compat                * 依赖：svga-player              * 依赖：svga-runtime
+* 适用：快速上线、闭源第三方 SDK   * 适用：不想引额外模块的自研项目 * 适用：新功能、复杂高频动效重构
+* 特性：SafeClear、自动初始化      * 保留：原有 API 写法            * 彻底根治：内存泄漏与多 View 共享
 ```
+
+---
+
+### 路线 0：`svga-compat` 零代码修改极速平替（强烈推荐，首选方案）
+
+适用于希望在几分钟内无风险完成升级、不改动任何业务代码与布局文件、或存在硬编码旧包名的**第三方闭源 AAR SDK** 的项目。
+
+#### 1. 配置 Gradle 依赖替换
+在工程根目录 `build.gradle.kts` 中配置依赖替换规则（Dependency Substitution）：
+```kotlin
+configurations.all {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.github.yyued:SVGAPlayer-Android"))
+            .using(module("dev.svganext:svga-compat:0.1.0"))
+            .because("0 行代码修改一键无感升级到 SVGA-Next 高性能内核")
+    }
+}
+```
+
+或者直接引入依赖（若无传递依赖冲突）：
+```kotlin
+dependencies {
+    implementation("dev.svganext:svga-compat:0.1.0")
+}
+```
+
+#### 2. 无需任何代码改动！
+- **代码中**：继续使用 `import com.opensource.svgaplayer.*`，无需改动任何导入语句。
+- **XML 布局中**：继续使用 `<com.opensource.svgaplayer.SVGAImageView app:source="xxx.svga" />`，照常自动起播。
+- **第三方闭源 SDK**：闭源 SDK 内部对 `com.opensource.svgaplayer` 的所有调用透明重定向至 `svga-compat`。
+- **Safe-Clear 自动保护**：老业务在 `onDestroy` 里调用的 `videoItem.clear()`，若该实体仍有其他 View 正在播放，会被自动安全拦截，杜绝黑屏崩溃。
+- **自动初始化**：内置 `SvgaInitProvider` 在启动时完成音频与缓存配置，`Application` 零侵入。
 
 ---
 

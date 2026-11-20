@@ -60,6 +60,9 @@ class MainActivity : Activity() {
             first.clearRequest(); second.clearRequest(); loader.clearMemoryCache()
             startActivity(Intent(this, PerformanceActivity::class.java))
         }
+        action("存量兼容模式 · svga-compat 演示") {
+            startActivity(Intent(this, CompatDemoActivity::class.java))
+        }
         setContentView(column)
         first.post { play("heartbeat.svga") }
     }

@@ -28,7 +28,7 @@ import kotlin.collections.ArrayList
  */
 private val audioFileLock = Any()
 
-class SVGAVideoEntity {
+open class SVGAVideoEntity {
 
     private val TAG = "SVGAVideoEntity"
 
@@ -36,29 +36,30 @@ class SVGAVideoEntity {
     var movieItem: MovieEntity? = null
 
     var videoSize = SVGARect(0.0, 0.0, 0.0, 0.0)
-        private set
+        protected set
 
     var FPS = 15
-        private set
+        protected set
 
     var frames: Int = 0
-        private set
+        protected set
 
     internal var spriteList: List<SVGAVideoSpriteEntity> = emptyList()
     internal var audioList: List<SVGAAudioEntity> = emptyList()
     internal var soundPool: SoundPool? = null
     internal var usesSharedSoundPool = false
-        private set
     internal var imageMap = HashMap<String, Bitmap>()
-    private var mCacheDir: File
-    private var mFrameHeight = 0
-    private var mFrameWidth = 0
+    internal var mCacheDir: File
+    internal var mFrameHeight = 0
+    internal var mFrameWidth = 0
     private val preparationLock = Any()
-    private var preparationStarted = false
-    private var prepared = false
-    private var released = false
+    internal var preparationStarted = false
+    internal var prepared = false
+    internal var released = false
+    val isReleased: Boolean
+        get() = released
     private var mCallback: (() -> Unit)? = null
-    private var decodingFailure: Throwable? = null
+    internal var decodingFailure: Throwable? = null
 
     /**
      * Cache weight: allocated bitmap storage plus encoded media payloads still retained in
@@ -81,6 +82,26 @@ class SVGAVideoEntity {
             "SVGA viewBox must have positive finite dimensions"
         }
         decodingFailure?.let { throw IOException("SVGA image data could not be decoded", it) }
+    }
+
+    constructor(source: SVGAVideoEntity) {
+        this.mCacheDir = source.mCacheDir
+        this.mFrameWidth = source.mFrameWidth
+        this.mFrameHeight = source.mFrameHeight
+        this.movieItem = source.movieItem
+        this.videoSize = source.videoSize
+        this.FPS = source.FPS
+        this.frames = source.frames
+        this.antiAlias = source.antiAlias
+        this.spriteList = source.spriteList
+        this.audioList = source.audioList
+        this.soundPool = source.soundPool
+        this.usesSharedSoundPool = source.usesSharedSoundPool
+        this.imageMap = source.imageMap
+        this.preparationStarted = source.preparationStarted
+        this.prepared = source.prepared
+        this.released = source.released
+        this.decodingFailure = source.decodingFailure
     }
 
     constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0)
@@ -350,7 +371,7 @@ class SVGAVideoEntity {
     }
 
     /** Disposes shared resources. Call only after every owner has released its lease. */
-    fun clear() {
+    open fun clear() {
         synchronized(preparationLock) {
             if (released) return
             released = true

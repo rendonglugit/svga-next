@@ -4,4 +4,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "svga-next"
-include(":svga-core", ":svga-player", ":svga-runtime", ":benchmark-upstream", ":sample")
+include(":svga-core", ":svga-player", ":svga-runtime", ":svga-compat", ":benchmark-upstream", ":sample")

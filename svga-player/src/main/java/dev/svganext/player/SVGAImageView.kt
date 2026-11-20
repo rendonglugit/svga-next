@@ -245,11 +245,11 @@ open class SVGAImageView @JvmOverloads constructor(
         getSVGADrawable()?.cleared = clear
     }
 
-    fun setVideoItem(videoItem: SVGAVideoEntity?) {
+    open fun setVideoItem(videoItem: SVGAVideoEntity?) {
         setVideoItem(videoItem, SVGADynamicEntity())
     }
 
-    fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
+    open fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
         stopAnimation(false)
         if (videoItem == null) {
             setImageDrawable(null)

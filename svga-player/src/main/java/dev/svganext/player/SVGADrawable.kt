@@ -7,7 +7,7 @@ import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import dev.svganext.player.drawer.SVGACanvasDrawer
 
-class SVGADrawable private constructor(
+open class SVGADrawable internal constructor(
     val videoItem: SVGAVideoEntity,
     val dynamicItem: SVGADynamicEntity,
     internal val audioPlayback: SVGAAudioPlayback

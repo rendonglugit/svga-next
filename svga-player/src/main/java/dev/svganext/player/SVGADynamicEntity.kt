@@ -12,7 +12,7 @@ import java.net.URL
 /**
  * Created by cuiminghui on 2017/3/30.
  */
-class SVGADynamicEntity {
+open class SVGADynamicEntity {
 
     internal var dynamicHidden: HashMap<String, Boolean> = hashMapOf()
 

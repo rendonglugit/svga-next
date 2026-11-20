@@ -11,6 +11,7 @@ import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
@@ -187,7 +188,7 @@ class SVGAParser(context: Context?) {
         private val threadNum = AtomicInteger(0)
         private var mShareParser = SVGAParser(null)
 
-        internal var threadPoolExecutor = Executors.newFixedThreadPool(4) { r ->
+        internal var threadPoolExecutor: ExecutorService = Executors.newFixedThreadPool(4) { r ->
             Thread(r, "SVGAParser-Thread-${threadNum.getAndIncrement()}")
         }
 

@@ -140,7 +140,7 @@ object SVGASoundManager {
      * 如果没有初始化，就使用原来SvgaPlayer库的音频加载逻辑。
      * @return true 则已初始化， 否则为 false
      */
-    internal fun isInit(): Boolean {
+    fun isInit(): Boolean {
         return soundPool != null
     }
 

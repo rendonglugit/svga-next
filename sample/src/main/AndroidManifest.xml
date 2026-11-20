@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:label="Readable SVGA" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".PerformanceActivity" android:exported="true" />
+        <activity android:name=".CompatDemoActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
