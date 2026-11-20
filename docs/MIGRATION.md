@@ -34,7 +34,7 @@
 
 | 变更项 | 官方 SVGAPlayer (`com.opensource`) | SVGA-Next (`dev.svganext`) | 影响与改动要求 |
 | :--- | :--- | :--- | :--- |
-| **Maven 坐标与包名** | `com.github.yyued:SVGAPlayer-Android` / `com.opensource.svgaplayer` | `dev.svganext:svga-runtime` / `dev.svganext:svga-player` | 若使用 `svga-compat` 则免改；若直接用新库须全局替换 `import` 与 XML 标签。 |
+| **Maven 坐标与包名** | `com.github.yyued:SVGAPlayer-Android` / `com.opensource.svgaplayer` | `io.github.rendonglugit:svga-runtime` / `io.github.rendonglugit:svga-player` | 若使用 `svga-compat` 则免改；若直接用新库须全局替换 `import` 与 XML 标签。 |
 | **资源清理机制** | 手动调用 `SVGAVideoEntity.clear()` 释放位图 | 严禁手动调用 `entity.clear()`，由 `ResourceLease` 自动管理 | `svga-compat` 内置 Safe-Clear 保护；`runtime` 下须全量移除业务层的 `videoItem.clear()`。 |
 | **`Drawable.clear()` 语义** | 会级联清理或重置播放资源 | 仅清除当前 Drawable 的播放帧状态，不触碰共享 Entity | 属于正常安全加固，不影响单 View 使用。 |
 | **XML `app:source`** | 支持 XML 声明文件并自动异步解析 | `ManagedSvgaImageView` 禁用自动解析，但 `svga-compat` 完整支持 | `svga-compat` 零修改即播；升级至 `ManagedSvgaImageView` 需改用 `bind()`。 |
@@ -74,7 +74,7 @@ SVGA-Next 提供了三条迁移路径，业务可根据改动预算进行选择�
 configurations.all {
     resolutionStrategy.dependencySubstitution {
         substitute(module("com.github.yyued:SVGAPlayer-Android"))
-            .using(module("dev.svganext:svga-compat:0.1.0"))
+            .using(module("io.github.rendonglugit:svga-compat:0.1.0"))
             .because("0 行代码修改一键无感升级到 SVGA-Next 高性能内核")
     }
 }
@@ -83,7 +83,7 @@ configurations.all {
 或者直接引入依赖（若无传递依赖冲突）：
 ```kotlin
 dependencies {
-    implementation("dev.svganext:svga-compat:0.1.0")
+    implementation("io.github.rendonglugit:svga-compat:0.1.0")
 }
 ```
 
@@ -106,7 +106,7 @@ dependencies {
 // build.gradle.kts
 dependencies {
     // 移除: implementation("com.github.yyued:SVGAPlayer-Android:x.x.x")
-    implementation("dev.svganext:svga-player:0.1.0")
+    implementation("io.github.rendonglugit:svga-player:0.1.0")
 }
 ```
 
@@ -141,7 +141,7 @@ dependencies {
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("dev.svganext:svga-runtime:0.1.0")
+    implementation("io.github.rendonglugit:svga-runtime:0.1.0")
 }
 ```
 

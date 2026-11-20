@@ -56,10 +56,10 @@
 
 ```kotlin
 // 方式 A（新项目推荐）：完整现代化运行时（包含租约所有权管理、请求合并、字节 LRU 缓存与生命周期感知的 Managed View）
-implementation("dev.svganext:svga-runtime:0.1.0")
+implementation("io.github.rendonglugit:svga-runtime:0.1.0")
 
 // 方式 B（存量项目极速平替）：官方旧版完全兼容层（保留 com.opensource.svgaplayer 包名、0 行代码修改、Safe-Clear 防崩、自动初始化）
-implementation("dev.svganext:svga-compat:0.1.0")
+implementation("io.github.rendonglugit:svga-compat:0.1.0")
 ```
 
 ---
@@ -192,7 +192,7 @@ val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
 存量项目有两个迁移选择：**0 代码改动极速平替（`svga-compat`）** 或 **彻底现代化重构（`svga-runtime`）**。
 
 #### 路线 0：极速无感平替（强烈推荐，0 行代码与 XML 修改）
-* **依赖**：`dev.svganext:svga-compat:0.1.0`
+* **依赖**：`io.github.rendonglugit:svga-compat:0.1.0`
 * **适用场景**：希望在几个小时内快速上线止血、不想重构几十个布局与业务类、或者项目集成了硬编码旧包名的**闭源第三方 SDK**。
 * **接入方式**：
   在工程根 `build.gradle.kts` 中配置 Gradle 依赖替换规则（Dependency Substitution）：
@@ -200,7 +200,7 @@ val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
   configurations.all {
       resolutionStrategy.dependencySubstitution {
           substitute(module("com.github.yyued:SVGAPlayer-Android"))
-              .using(module("dev.svganext:svga-compat:0.1.0"))
+              .using(module("io.github.rendonglugit:svga-compat:0.1.0"))
               .because("一键无感升级到 SVGA-Next 高性能内核")
       }
   }
@@ -215,13 +215,13 @@ val cancelPrefetch = SVGAParser(context).prefetchToDisk(url) { result ->
 ---
 
 #### 路线 A：源码级渐进替换（仅替换底层内核）
-* 依赖 `dev.svganext:svga-player:0.1.0`。
+* 依赖 `io.github.rendonglugit:svga-player:0.1.0`。
 * 将代码中的 `com.opensource.svgaplayer` 全局批量替换为 `dev.svganext.player`。
 * 保留原有的 `SVGAImageView` 与 `SVGAParser` 调用方式。
 * **局限**：依然保留手动的资源释放逻辑，无法自动享受多 View 共享安全租约与请求并发合并。
 
 #### 路线 B：全面升级 Runtime 架构（推荐用于新模块与深度重构）
-* 依赖 `dev.svganext:svga-runtime:0.1.0`。
+* 依赖 `io.github.rendonglugit:svga-runtime:0.1.0`。
 * 将 XML 中的 `SVGAImageView` 替换为 `ManagedSvgaImageView`，**并移除 XML 中的 `app:source`**，改用 `svgaView.bind(loader, request)`。
 * 引入全局 `SvgaLoader` 单例，彻底移除业务层原本调用的 `videoItem?.clear()`，所有权交给租约管理。
 * **收益**：从架构根源上消灭内存泄漏，支持直播间复杂动效多 View 共享相同解码资源。
